@@ -27,7 +27,7 @@ func TestCLI(t *testing.T) {
 		{"help", nil, 0, "Phase 1"},
 		{"valid", []string{"validate-config", "-config", "../../configs/experiment.json"}, 0, "phase0-faq-v1"},
 		{"missing", []string{"validate-config", "-config", "missing.json"}, 1, ""},
-		{"later phase", []string{"replay"}, 2, "unknown command"},
+		{"missing replay data", []string{"replay"}, 2, "requires -data"},
 		{"extra argument", []string{"validate-config", "extra"}, 2, "unexpected positional"},
 		{"bad flag", []string{"validate-config", "-typo"}, 2, "flag provided but not defined"},
 	}

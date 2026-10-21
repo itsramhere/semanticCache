@@ -1,0 +1,356 @@
+{
+    "id":  "synthetic-helpdesk-v1",
+    "origin":  "Manually authored fictional AcmeDesk FAQ; public synthetic data; no user records. Geometry is simulated, not measured inference.",
+    "groups":  [
+                   {
+                       "id":  "password-reset-1",
+                       "topic":  "password-reset",
+                       "split":  "development",
+                       "action":  "request a password reset",
+                       "instruction":  "choose Forgot password on the sign-in page"
+                   },
+                   {
+                       "id":  "password-reset-2",
+                       "topic":  "password-reset",
+                       "split":  "development",
+                       "action":  "change a password while signed in",
+                       "instruction":  "open Security and select Change password"
+                   },
+                   {
+                       "id":  "password-reset-3",
+                       "topic":  "password-reset",
+                       "split":  "development",
+                       "action":  "check password requirements",
+                       "instruction":  "read the password rules under Security"
+                   },
+                   {
+                       "id":  "password-reset-4",
+                       "topic":  "password-reset",
+                       "split":  "development",
+                       "action":  "invalidate a password reset link",
+                       "instruction":  "request a new link to invalidate the old one"
+                   },
+                   {
+                       "id":  "password-reset-5",
+                       "topic":  "password-reset",
+                       "split":  "development",
+                       "action":  "find the password reset email",
+                       "instruction":  "check spam and confirm the account email address"
+                   },
+                   {
+                       "id":  "sign-in-1",
+                       "topic":  "sign-in",
+                       "split":  "development",
+                       "action":  "sign in with single sign-on",
+                       "instruction":  "choose Company sign-in and enter the workspace domain"
+                   },
+                   {
+                       "id":  "sign-in-2",
+                       "topic":  "sign-in",
+                       "split":  "development",
+                       "action":  "recover a two-factor authentication code",
+                       "instruction":  "use a saved recovery code on the verification page"
+                   },
+                   {
+                       "id":  "sign-in-3",
+                       "topic":  "sign-in",
+                       "split":  "development",
+                       "action":  "resolve a locked account",
+                       "instruction":  "wait fifteen minutes before another sign-in attempt"
+                   },
+                   {
+                       "id":  "sign-in-4",
+                       "topic":  "sign-in",
+                       "split":  "development",
+                       "action":  "sign out of all devices",
+                       "instruction":  "open Security and choose End all sessions"
+                   },
+                   {
+                       "id":  "sign-in-5",
+                       "topic":  "sign-in",
+                       "split":  "development",
+                       "action":  "check supported browsers",
+                       "instruction":  "read the Supported browsers section in Help"
+                   },
+                   {
+                       "id":  "invitations-1",
+                       "topic":  "invitations",
+                       "split":  "tuning",
+                       "action":  "invite a workspace member",
+                       "instruction":  "open Members and select Invite"
+                   },
+                   {
+                       "id":  "invitations-2",
+                       "topic":  "invitations",
+                       "split":  "tuning",
+                       "action":  "revoke a pending invitation",
+                       "instruction":  "open Pending invitations and select Revoke"
+                   },
+                   {
+                       "id":  "invitations-3",
+                       "topic":  "invitations",
+                       "split":  "tuning",
+                       "action":  "resend an invitation",
+                       "instruction":  "open Pending invitations and select Resend"
+                   },
+                   {
+                       "id":  "invitations-4",
+                       "topic":  "invitations",
+                       "split":  "tuning",
+                       "action":  "set the default invitation role",
+                       "instruction":  "open Members settings and choose Default role"
+                   },
+                   {
+                       "id":  "invitations-5",
+                       "topic":  "invitations",
+                       "split":  "tuning",
+                       "action":  "accept a workspace invitation",
+                       "instruction":  "open the invitation link and confirm the workspace"
+                   },
+                   {
+                       "id":  "notifications-1",
+                       "topic":  "notifications",
+                       "split":  "tuning",
+                       "action":  "disable email notifications",
+                       "instruction":  "open Notifications and turn off Email"
+                   },
+                   {
+                       "id":  "notifications-2",
+                       "topic":  "notifications",
+                       "split":  "tuning",
+                       "action":  "enable desktop notifications",
+                       "instruction":  "open Notifications and allow Desktop alerts"
+                   },
+                   {
+                       "id":  "notifications-3",
+                       "topic":  "notifications",
+                       "split":  "tuning",
+                       "action":  "set quiet hours",
+                       "instruction":  "open Notifications and choose a quiet-hours schedule"
+                   },
+                   {
+                       "id":  "notifications-4",
+                       "topic":  "notifications",
+                       "split":  "tuning",
+                       "action":  "choose digest frequency",
+                       "instruction":  "open Notifications and select Digest frequency"
+                   },
+                   {
+                       "id":  "notifications-5",
+                       "topic":  "notifications",
+                       "split":  "tuning",
+                       "action":  "mute a conversation",
+                       "instruction":  "open the conversation menu and select Mute"
+                   },
+                   {
+                       "id":  "profile-1",
+                       "topic":  "profile",
+                       "split":  "tuning",
+                       "action":  "change a display name",
+                       "instruction":  "open Profile and edit Display name"
+                   },
+                   {
+                       "id":  "profile-2",
+                       "topic":  "profile",
+                       "split":  "tuning",
+                       "action":  "upload a profile photo",
+                       "instruction":  "open Profile and choose Upload photo"
+                   },
+                   {
+                       "id":  "profile-3",
+                       "topic":  "profile",
+                       "split":  "tuning",
+                       "action":  "set a profile timezone",
+                       "instruction":  "open Profile and select Timezone"
+                   },
+                   {
+                       "id":  "profile-4",
+                       "topic":  "profile",
+                       "split":  "tuning",
+                       "action":  "hide a profile email address",
+                       "instruction":  "open Profile privacy and disable Show email"
+                   },
+                   {
+                       "id":  "profile-5",
+                       "topic":  "profile",
+                       "split":  "tuning",
+                       "action":  "write a profile biography",
+                       "instruction":  "open Profile and edit About me"
+                   },
+                   {
+                       "id":  "search-1",
+                       "topic":  "search",
+                       "split":  "tuning",
+                       "action":  "search for an exact phrase",
+                       "instruction":  "place the phrase inside quotation marks"
+                   },
+                   {
+                       "id":  "search-2",
+                       "topic":  "search",
+                       "split":  "tuning",
+                       "action":  "filter search by author",
+                       "instruction":  "open search filters and select Author"
+                   },
+                   {
+                       "id":  "search-3",
+                       "topic":  "search",
+                       "split":  "tuning",
+                       "action":  "filter search by date",
+                       "instruction":  "open search filters and select Date range"
+                   },
+                   {
+                       "id":  "search-4",
+                       "topic":  "search",
+                       "split":  "tuning",
+                       "action":  "save a search query",
+                       "instruction":  "run the search and choose Save query"
+                   },
+                   {
+                       "id":  "search-5",
+                       "topic":  "search",
+                       "split":  "tuning",
+                       "action":  "search archived conversations",
+                       "instruction":  "enable Include archived in search filters"
+                   },
+                   {
+                       "id":  "export-1",
+                       "topic":  "export",
+                       "split":  "final",
+                       "action":  "export workspace messages",
+                       "instruction":  "open Data export and choose Messages"
+                   },
+                   {
+                       "id":  "export-2",
+                       "topic":  "export",
+                       "split":  "final",
+                       "action":  "export workspace files",
+                       "instruction":  "open Data export and choose Files"
+                   },
+                   {
+                       "id":  "export-3",
+                       "topic":  "export",
+                       "split":  "final",
+                       "action":  "select an export format",
+                       "instruction":  "open Data export and select Format"
+                   },
+                   {
+                       "id":  "export-4",
+                       "topic":  "export",
+                       "split":  "final",
+                       "action":  "schedule a recurring export",
+                       "instruction":  "open Data export and choose Schedule"
+                   },
+                   {
+                       "id":  "export-5",
+                       "topic":  "export",
+                       "split":  "final",
+                       "action":  "delete a completed export archive",
+                       "instruction":  "open Export history and choose Delete archive"
+                   },
+                   {
+                       "id":  "cancellation-1",
+                       "topic":  "cancellation",
+                       "split":  "final",
+                       "action":  "cancel a subscription renewal",
+                       "instruction":  "open Billing and select Cancel renewal"
+                   },
+                   {
+                       "id":  "cancellation-2",
+                       "topic":  "cancellation",
+                       "split":  "final",
+                       "action":  "undo a scheduled cancellation",
+                       "instruction":  "open Billing and select Resume renewal"
+                   },
+                   {
+                       "id":  "cancellation-3",
+                       "topic":  "cancellation",
+                       "split":  "final",
+                       "action":  "find the cancellation effective date",
+                       "instruction":  "open Billing and read the Scheduled end date"
+                   },
+                   {
+                       "id":  "cancellation-4",
+                       "topic":  "cancellation",
+                       "split":  "final",
+                       "action":  "download a cancellation receipt",
+                       "instruction":  "open Billing history and choose Cancellation receipt"
+                   },
+                   {
+                       "id":  "cancellation-5",
+                       "topic":  "cancellation",
+                       "split":  "final",
+                       "action":  "close a free workspace",
+                       "instruction":  "open Workspace settings and select Close workspace"
+                   },
+                   {
+                       "id":  "storage-1",
+                       "topic":  "storage",
+                       "split":  "final",
+                       "action":  "check the workspace storage limit",
+                       "instruction":  "open Storage and read Plan limit"
+                   },
+                   {
+                       "id":  "storage-2",
+                       "topic":  "storage",
+                       "split":  "final",
+                       "action":  "find large files",
+                       "instruction":  "open Storage and sort files by Size"
+                   },
+                   {
+                       "id":  "storage-3",
+                       "topic":  "storage",
+                       "split":  "final",
+                       "action":  "enable storage alerts",
+                       "instruction":  "open Storage settings and enable Limit alerts"
+                   },
+                   {
+                       "id":  "storage-4",
+                       "topic":  "storage",
+                       "split":  "final",
+                       "action":  "read how storage is calculated",
+                       "instruction":  "open Storage help and read Calculation rules"
+                   },
+                   {
+                       "id":  "storage-5",
+                       "topic":  "storage",
+                       "split":  "final",
+                       "action":  "request a storage upgrade",
+                       "instruction":  "open Billing and choose Increase storage"
+                   },
+                   {
+                       "id":  "recovery-1",
+                       "topic":  "recovery",
+                       "split":  "final",
+                       "action":  "restore a deleted file",
+                       "instruction":  "open Trash and select Restore"
+                   },
+                   {
+                       "id":  "recovery-2",
+                       "topic":  "recovery",
+                       "split":  "final",
+                       "action":  "restore a previous file version",
+                       "instruction":  "open File history and choose Restore version"
+                   },
+                   {
+                       "id":  "recovery-3",
+                       "topic":  "recovery",
+                       "split":  "final",
+                       "action":  "find the file recovery window",
+                       "instruction":  "open Trash help and read Retention window"
+                   },
+                   {
+                       "id":  "recovery-4",
+                       "topic":  "recovery",
+                       "split":  "final",
+                       "action":  "download a file before restoring it",
+                       "instruction":  "open Trash and choose Download preview"
+                   },
+                   {
+                       "id":  "recovery-5",
+                       "topic":  "recovery",
+                       "split":  "final",
+                       "action":  "report a missing file",
+                       "instruction":  "open Help and submit a Missing file report"
+                   }
+               ]
+}

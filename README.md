@@ -2,7 +2,7 @@
 
 A Go prototype for reusing answers to semantically similar FAQ requests. Requests are embedded as vectors, matched against a scoped cache, and served from the cache only after the stored answer passes validation. A miss generates a new answer and caches it when eligible.
 
-The research goal is to determine whether a local predictor can skip unproductive semantic-cache searches cheaply enough to reduce total serving cost. **Phase 1 is implemented:** a working always-search baseline, embedding adapters, a deterministic fake LLM, an offline demo, and regression tests. The predictor and comparative evaluation are planned work.
+The research goal is to determine whether a local predictor can skip unproductive semantic-cache searches cheaply enough to reduce total serving cost. **Phases 1 and 2 are implemented:** the baseline, validated synthetic workloads, read-only oracle, paired replay modes, and checked metrics. The LSH predictor is planned for Phase 3.
 
 ## How it works
 
@@ -88,6 +88,63 @@ go build ./cmd/semcache
 
 `validate-config` rejects unknown fields, trailing JSON, missing settings, and invalid values. `verify-policy` runs 14 hand-vector examples. Demo options are `-config`, `-output`, and `-tei`.
 
+## Phase 2: evaluation harness
+
+Build all three splits, validate them together, then replay development data:
+
+```powershell
+go run ./cmd/semcache build-data -seed 101
+go run ./cmd/semcache validate-data data/generated/development-101.json data/generated/tuning-101.json data/generated/final-101.json
+go run ./cmd/semcache replay -data data/generated/development-101.json -mode isolation -start warm -output results/isolation
+go run ./cmd/semcache replay -data data/generated/development-101.json -mode end-to-end -start cold -output results/end-to-end
+```
+
+Repeat `build-data` with `-seed 202` and `-seed 303` for the other declared orders.
+The [data documentation](data/README.md) records origin, split definitions,
+initial states and a representative label review. Validation rejects duplicate
+IDs, split leakage, missing metadata, invalid vectors and backward timestamps.
+Whitespace-only identifiers and labels are treated as missing metadata.
+Supply all split paths together to check leakage across files. Keep final
+replays unopened until candidate selection is frozen.
+
+These evaluation fixtures use **simulated controlled vectors**, with a distinct
+64-dimensional model identity and [configuration](configs/phase2_fixture.json).
+They test the harness rather than MiniLM quality. The Phase 1 demo continues to
+use recorded real MiniLM vectors. Fake LLM generation is simulated in both.
+
+Replay compares always-search with always-skip. Mode A (`isolation`) evaluates
+decisions against identical authoritative baseline snapshots and updates;
+serving counts in this mode describe the baseline path. Mode B (`end-to-end`)
+uses independent caches that may diverge. Its oracle labels each request using
+that run's own pre-decision state. Both modes reset state between runs and
+validate retrieved answers with the baseline policy.
+
+Replay flags are `-data` (required), `-config` (defaults to the fixture config),
+`-mode`, `-start` (`warm` or `cold`), `-capacity` (default 100), `-output`,
+`-oracle-every` (default 1; 0 disables diagnostics), and `-oracle-log` (default
+true). Oracle sampling/logging affects diagnostic counts and available labels;
+regression tests verify unchanged serving responses, decisions and mutations.
+
+Each run saves paired JSONL traces, final states, exact workload/config inputs,
+`metrics.json`, `metrics.csv`, and a manifest with source/artifact hashes, Git
+revision/status, Go version, seed and command. Saving rejects duplicate predictor IDs,
+mismatched paired request streams/options, and input files that differ from
+the evaluated configuration or workload. Timings are measured local
+routing with precomputed vectors. End-to-end latency estimates and serving
+cost are explicitly simulated using the saved assumptions; no artificial
+delays are slept. Oracle, snapshot copying and logging are outside serving
+timings and counters. Build time is reported separately and amortized in
+cost/estimated latency. Memory is zero for these constant controls, which have
+no summary; process/rebuild memory is `N/A` until implemented/measured.
+
+Metrics report TP/FP/FN/TN, lookup reduction, hit recall, missed-hit fraction,
+unsuccessful routed searches, correctly avoided misses, operation counts,
+failures, p50/p95, predictor/update/build time and paired cost/generation
+differences. Zero denominators are `N/A`. Answer-reuse accuracy uses authored
+answer classes and scope, separately from vector-match routing recall. The
+near-match fixtures deliberately expose incorrect reuse despite a vector hit.
+These checks establish evaluation behavior, without a predictor benefit claim.
+
 ## Live embeddings
 
 The Go HTTP adapter supports a [Hugging Face TEI server](https://huggingface.co/docs/text-embeddings-inference/quick_tour). Configure the server with:
@@ -142,8 +199,8 @@ internal/semanticcache/testdata/ Recorded real embedding fixture
 go.mod                        Go module and toolchain requirement
 ```
 
-Generated runs, binaries, coverage files, and the original local planning/progress Markdown files are ignored by Git. This README is tracked and contains the setup and behavior needed to run the baseline.
+Generated datasets, runs, binaries, coverage files, and the original local planning/progress Markdown files are ignored by Git. The authored catalog, generator, configuration, and public documentation are tracked.
 
 ## Planned work
 
-The next phase builds validated workloads, independent replay state, a read-only oracle, and trustworthy metrics. Later phases add an LSH bucket-occupancy predictor, lifecycle synchronization, recall/memory/cost tuning, remote-cache comparisons, and a reproducible final evaluation. These components are not implemented yet.
+The next phase adds an LSH bucket-occupancy predictor. Later phases cover lifecycle synchronization, recall/memory/cost tuning, remote-cache comparisons, and a reproducible final evaluation. These components are not implemented yet.

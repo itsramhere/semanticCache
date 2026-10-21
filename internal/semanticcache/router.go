@@ -45,6 +45,8 @@ type StageTimings struct {
 	ValidationNS int64  `json:"validation_ns"`
 	GenerationNS int64  `json:"generation_ns"`
 	CacheWriteNS int64  `json:"cache_write_ns"`
+	PredictorNS  int64  `json:"predictor_ns"`
+	UpdateNS     int64  `json:"update_ns"`
 	TotalNS      int64  `json:"total_ns"`
 }
 type Result struct {
@@ -56,12 +58,14 @@ type Result struct {
 	MatchedEntryID  string           `json:"matched_entry_id,omitempty"`
 	Similarity      float64          `json:"similarity,omitempty"`
 	SearchCount     int              `json:"search_count"`
+	EmbeddingCount  int              `json:"embedding_count"`
 	GenerationCount int              `json:"generation_count"`
 	WriteCount      int              `json:"write_count"`
 	Error           string           `json:"error,omitempty"`
 	CacheWriteError string           `json:"cache_write_error,omitempty"`
 	Timings         StageTimings     `json:"timings"`
 	Embedding       *EmbeddingRecord `json:"embedding,omitempty"`
+	Decision        *Decision        `json:"decision,omitempty"`
 }
 
 type Baseline struct {
@@ -77,12 +81,20 @@ type Baseline struct {
 }
 
 func (b *Baseline) Serve(ctx context.Context, r Request) (result Result) {
+	return b.serve(ctx, r, nil, nil)
+}
+
+// serve shares production validation and generation between replay controls.
+// Diagnostic work runs after embedding and before the decision, and is excluded
+// from serving timing. The public Phase 1 path remains always-search.
+func (b *Baseline) serve(ctx context.Context, r Request, predict func([]float64) Decision, diagnose func([]float64) error) (result Result) {
 	start := time.Now()
+	var diagnosticNS int64
 	result.RequestID = r.ID
 	result.Source = "error"
 	result.GenerationKind = "simulated-fake-llm"
 	result.Timings.Source = "measured-wall-clock"
-	defer func() { result.Timings.TotalNS = time.Since(start).Nanoseconds() }()
+	defer func() { result.Timings.TotalNS = time.Since(start).Nanoseconds() - diagnosticNS }()
 	fail := func(err error) Result { result.Error = err.Error(); return result }
 	if err := ctx.Err(); err != nil {
 		return fail(err)
@@ -107,6 +119,7 @@ func (b *Baseline) Serve(ctx context.Context, r Request) (result Result) {
 	}
 	b.lastTimestamp = r.Timestamp
 	stage := time.Now()
+	result.EmbeddingCount++
 	v, err := b.Embedder.Embed(ctx, r.Text)
 	if err == nil {
 		v, err = normalizeDimension(v, b.Identity.Dimension)
@@ -116,7 +129,23 @@ func (b *Baseline) Serve(ctx context.Context, r Request) (result Result) {
 		return fail(fmt.Errorf("embedding: %w", err))
 	}
 	result.Embedding = &EmbeddingRecord{r.ID, strings.TrimSpace(r.Text), b.Identity, append([]float64(nil), v...)}
-	if r.CacheEligible {
+	if diagnose != nil {
+		stage = time.Now()
+		err := diagnose(append([]float64(nil), v...))
+		diagnosticNS += time.Since(stage).Nanoseconds()
+		if err != nil {
+			return fail(fmt.Errorf("oracle: %w", err))
+		}
+	}
+	search := r.CacheEligible
+	if r.CacheEligible && predict != nil {
+		stage = time.Now()
+		d := predict(append([]float64(nil), v...))
+		result.Timings.PredictorNS = time.Since(stage).Nanoseconds()
+		result.Decision = &d
+		search = d.Search
+	}
+	if search {
 		stage = time.Now()
 		result.SearchCount++
 		candidate, err := b.Cache.Search(ctx, r, v)

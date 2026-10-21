@@ -19,14 +19,18 @@ Usage:
 
 Commands:
   demo             Replay the baseline; flags: -config, -output, -tei.
+  build-data       Build split workloads; flags: -catalog, -output, -seed.
+  validate-data    Validate workload JSON paths together, including split leakage.
+  replay           Compare controls; requires -data; flags: -config, -output,
+                   -mode, -start, -capacity, -oracle-every, -oracle-log.
   version          Print module path, Go toolchain, and source revision.
   verify-policy    Execute the machine-checkable examples from docs/cache_policy.md.
   validate-config  Check a JSON experiment configuration:
                    validate-config -config <path>
   help             Print this message.
 
-Phase 1 supplies the always-search cache baseline and demo. Prediction and
-evaluation arrive in later phases.
+Phase 1 supplies the baseline. Phase 2 supplies controlled workload evaluation.
+The LSH predictor arrives in Phase 3.
 `
 
 func main() {
@@ -42,6 +46,10 @@ func run(args []string, out, errOut io.Writer) int {
 		return 0
 	}
 	switch args[0] {
+	case "replay":
+		return replay(args[1:], out, errOut)
+	case "build-data", "validate-data":
+		return dataCommand(args[0], args[1:], out, errOut)
 	case "demo":
 		return demo(args[1:], out, errOut)
 	case "help", "-h", "--help":
