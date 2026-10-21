@@ -1,0 +1,31 @@
+# Existing local planning and progress documents.
+/implementation_and_debugging_plan.md
+/semantic_cache_project_summary.md
+/docs/baseline.md
+/docs/cache_policy.md
+/docs/experiment_protocol.md
+/docs/progress.md
+
+# Generated experiment runs and demo artifacts.
+/results/
+
+# Go binaries, test executables, coverage and profiling output.
+/semcache
+/bin/
+/dist/
+*.exe
+*.test
+*.out
+*.prof
+/coverage/
+/coverage.*
+
+# Local environment files; example configuration may be committed.
+/.env
+/.env.*
+!/.env.example
+
+# Operating-system metadata.
+.DS_Store
+Thumbs.db
+Desktop.ini

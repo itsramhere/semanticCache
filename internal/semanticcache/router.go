@@ -1,0 +1,186 @@
+package semanticcache
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"strings"
+	"time"
+)
+
+type GeneratedAnswer struct {
+	Answer   string
+	Reusable bool
+}
+type Generator interface {
+	Generate(context.Context, Request) (GeneratedAnswer, error)
+}
+
+// FakeLLM is deterministic simulated generation, not a real language model.
+type FakeLLM struct{}
+
+func (FakeLLM) Generate(ctx context.Context, r Request) (GeneratedAnswer, error) {
+	if err := ctx.Err(); err != nil {
+		return GeneratedAnswer{}, err
+	}
+	// Structured encoding keeps scope field boundaries unambiguous, including
+	// when individual values contain whitespace or formatting characters.
+	payload, err := json.Marshal(struct {
+		Scope Scope  `json:"scope"`
+		Text  string `json:"text"`
+	}{r.Scope(), strings.TrimSpace(r.Text)})
+	if err != nil {
+		return GeneratedAnswer{}, err
+	}
+	sum := sha256.Sum256(payload)
+	return GeneratedAnswer{Answer: "simulated FAQ answer " + hex.EncodeToString(sum[:8]), Reusable: r.CacheEligible}, nil
+}
+
+type StageTimings struct {
+	Source       string `json:"source"`
+	EmbeddingNS  int64  `json:"embedding_ns"`
+	SearchNS     int64  `json:"search_ns"`
+	ValidationNS int64  `json:"validation_ns"`
+	GenerationNS int64  `json:"generation_ns"`
+	CacheWriteNS int64  `json:"cache_write_ns"`
+	TotalNS      int64  `json:"total_ns"`
+}
+type Result struct {
+	RequestID       string           `json:"request_id"`
+	Success         bool             `json:"success"`
+	Answer          string           `json:"answer,omitempty"`
+	Source          string           `json:"source"`
+	GenerationKind  string           `json:"generation_kind"`
+	MatchedEntryID  string           `json:"matched_entry_id,omitempty"`
+	Similarity      float64          `json:"similarity,omitempty"`
+	SearchCount     int              `json:"search_count"`
+	GenerationCount int              `json:"generation_count"`
+	WriteCount      int              `json:"write_count"`
+	Error           string           `json:"error,omitempty"`
+	CacheWriteError string           `json:"cache_write_error,omitempty"`
+	Timings         StageTimings     `json:"timings"`
+	Embedding       *EmbeddingRecord `json:"embedding,omitempty"`
+}
+
+type Baseline struct {
+	Embedder  Embedder
+	Cache     Cache
+	Generator Generator
+	Clock     Clock
+	PolicyID  string
+	Threshold float64
+	// A fixed identity prevents embeddings from different models sharing a cache.
+	Identity      EmbeddingIdentity
+	lastTimestamp time.Time
+}
+
+func (b *Baseline) Serve(ctx context.Context, r Request) (result Result) {
+	start := time.Now()
+	result.RequestID = r.ID
+	result.Source = "error"
+	result.GenerationKind = "simulated-fake-llm"
+	result.Timings.Source = "measured-wall-clock"
+	defer func() { result.Timings.TotalNS = time.Since(start).Nanoseconds() }()
+	fail := func(err error) Result { result.Error = err.Error(); return result }
+	if err := ctx.Err(); err != nil {
+		return fail(err)
+	}
+	if err := ValidateRequest(r); err != nil {
+		return fail(err)
+	}
+	if b.Embedder == nil || b.Cache == nil || b.Generator == nil || b.Clock == nil || b.PolicyID == "" || !finite(b.Threshold) || b.Threshold < -1 || b.Threshold > 1 {
+		return fail(fmt.Errorf("incomplete baseline configuration"))
+	}
+	if err := b.Identity.Validate(); err != nil {
+		return fail(err)
+	}
+	if b.Embedder.Identity() != b.Identity {
+		return fail(fmt.Errorf("embedding identity mismatch; reset cache before changing models"))
+	}
+	if !r.Timestamp.Equal(b.Clock.Now()) {
+		return fail(fmt.Errorf("request timestamp must equal serving clock"))
+	}
+	if r.Timestamp.Before(b.lastTimestamp) {
+		return fail(fmt.Errorf("request time moved backward"))
+	}
+	b.lastTimestamp = r.Timestamp
+	stage := time.Now()
+	v, err := b.Embedder.Embed(ctx, r.Text)
+	if err == nil {
+		v, err = normalizeDimension(v, b.Identity.Dimension)
+	}
+	result.Timings.EmbeddingNS = time.Since(stage).Nanoseconds()
+	if err != nil {
+		return fail(fmt.Errorf("embedding: %w", err))
+	}
+	result.Embedding = &EmbeddingRecord{r.ID, strings.TrimSpace(r.Text), b.Identity, append([]float64(nil), v...)}
+	if r.CacheEligible {
+		stage = time.Now()
+		result.SearchCount++
+		candidate, err := b.Cache.Search(ctx, r, v)
+		result.Timings.SearchNS = time.Since(stage).Nanoseconds()
+		if err != nil {
+			return fail(fmt.Errorf("search: %w", err))
+		}
+		if err := ctx.Err(); err != nil {
+			return fail(err)
+		}
+		stage = time.Now()
+		if candidate != nil {
+			e := candidate.Entry
+			valid := e != nil && ValidAnswer(*e, r, b.Clock.Now(), b.PolicyID)
+			if valid {
+				stored, validationErr := normalizeDimension(e.Embedding, b.Identity.Dimension)
+				if validationErr != nil {
+					valid = false
+				} else {
+					// Repeat the cache's normalization/scoring exactly, including
+					// at the inclusive float64 threshold boundary.
+					query, _ := normalizeDimension(v, b.Identity.Dimension)
+					score, _ := CosineSimilarity(query, stored)
+					valid = score >= b.Threshold
+					result.Similarity = score
+				}
+			}
+			result.Timings.ValidationNS = time.Since(stage).Nanoseconds()
+			if valid {
+				result.Success = true
+				result.Source = "cache"
+				result.Answer = e.Answer
+				result.MatchedEntryID = e.ID
+				return result
+			}
+		}
+		result.Timings.ValidationNS = time.Since(stage).Nanoseconds()
+	}
+	stage = time.Now()
+	result.GenerationCount++
+	answer, err := b.Generator.Generate(ctx, r)
+	result.Timings.GenerationNS = time.Since(stage).Nanoseconds()
+	if err != nil {
+		return fail(fmt.Errorf("generation: %w", err))
+	}
+	if err := ctx.Err(); err != nil {
+		return fail(err)
+	}
+	if strings.TrimSpace(answer.Answer) == "" {
+		return fail(fmt.Errorf("generation returned an empty answer"))
+	}
+	result.Success = true
+	result.Source = "generation"
+	result.Answer = answer.Answer
+	if r.CacheEligible && answer.Reusable {
+		entry := Entry{ID: r.ID, Embedding: append([]float64(nil), v...), Answer: answer.Answer, Scope: r.Scope(), Validity: ValidityMetadata{Reusable: true, PolicyVersion: b.PolicyID}}
+		stage = time.Now()
+		err = b.Cache.Put(ctx, entry)
+		result.Timings.CacheWriteNS = time.Since(stage).Nanoseconds()
+		if err != nil {
+			result.CacheWriteError = err.Error()
+		} else {
+			result.WriteCount++
+		}
+	}
+	return result
+}

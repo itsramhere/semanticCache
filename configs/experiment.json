@@ -1,0 +1,28 @@
+{
+  "id": "phase0-faq-v1",
+  "policy": {
+    "id": "faq-cosine-v1",
+    "cosine_threshold": 0.9,
+    "ttl_seconds": 3600,
+    "capacity_entries": [100, 1000]
+  },
+  "embedding": {
+    "model": "sentence-transformers/all-MiniLM-L6-v2",
+    "dimension": 384,
+    "preprocessing": "trim-unicode-preserve-case-whitespace-l2-v1"
+  },
+  "workload_id": "synthetic-helpdesk-v1",
+  "requests_per_split": 1000,
+  "workload_seeds": [101, 202, 303],
+  "projection_seeds": [1001, 2002, 3003],
+  "min_hit_recall": 0.99,
+  "max_p95_latency_ms": 1200,
+  "max_summary_bytes": 8388608,
+  "assumptions": {
+    "embedding": {"source": "simulated", "cost_usd": 0.00001, "latency_ms": 5},
+    "search": {"source": "simulated", "cost_usd": 0.0001, "latency_ms": 20},
+    "generation": {"source": "simulated", "cost_usd": 0.002, "latency_ms": 1000},
+    "cache_write": {"source": "simulated", "cost_usd": 0.00002, "latency_ms": 2},
+    "local_cpu_ms": {"source": "simulated", "cost_usd": 0.00000001, "latency_ms": 0}
+  }
+}
