@@ -28,7 +28,22 @@ func SaveReplay(dir, sourceRoot string, c Config, w Workload, runs []ReplayRun, 
 	artifacts := map[string][]byte{}
 	var summaries []Metrics
 	seen := map[string]bool{}
+	projectionSeeds := map[string]int64{}
 	for _, run := range runs {
+		if run.Projections != nil {
+			if err := run.Projections.Validate(); err != nil {
+				return err
+			}
+			if run.Projections.ID() != run.PredictorID || run.Projections.Config.Identity != w.Identity {
+				return fmt.Errorf("run projection identity mismatch")
+			}
+			b, err := json.MarshalIndent(run.Projections, "", "  ")
+			if err != nil {
+				return err
+			}
+			artifacts[run.PredictorID+"-projections.json"] = b
+			projectionSeeds[run.PredictorID] = run.Projections.Config.Seed
+		}
 		if filepath.Base(run.PredictorID) != run.PredictorID || strings.ContainsAny(run.PredictorID, `/\`) || strings.TrimSpace(run.PredictorID) == "" || seen[run.PredictorID] {
 			return fmt.Errorf("invalid or duplicate predictor ID")
 		}
@@ -204,10 +219,12 @@ func SaveReplay(dir, sourceRoot string, c Config, w Workload, runs []ReplayRun, 
 		"run_id":     fmt.Sprintf("phase2-%s-%d-%s-%s", w.Split, w.Seed, runs[0].Options.Mode, runs[0].Options.Start),
 		"created_at": time.Now().UTC(), "go_version": runtime.Version(), "platform": runtime.GOOS + "/" + runtime.GOARCH,
 		"source_revision": revision, "git_status": status, "source_sha256": hashBytes([]byte(digest.String())), "source_files_sha256": sources,
-		"artifacts_sha256": hashes, "dataset_id": w.ID, "split": w.Split, "workload_seed": w.Seed, "projection_seed": nil,
+		"artifacts_sha256": hashes, "dataset_id": w.ID, "split": w.Split, "workload_seed": w.Seed,
 		"configuration_id": c.ID, "embedding_identity": w.Identity, "vector_source": w.VectorSource, "options": runs[0].Options,
 		"command": os.Args, "generation": "deterministic simulated fake LLM",
-		"timing_boundary": "measured local routing with precomputed vectors; excludes original embedding inference, snapshot copies, oracle and logging; includes vector loading, prediction, generation CPU and Observe; build separately amortized; no sleeps",
+		"projection_seeds":        projectionSeeds,
+		"summary_memory_boundary": "conservative structural estimate including projections, entries, vectors, keys, strings and map/container allowances; not a retained-heap or process measurement",
+		"timing_boundary":         "measured local routing with precomputed vectors; excludes original embedding inference, evaluation snapshot copies, oracle and logging; includes vector loading, prediction, generation CPU, synchronous maintenance snapshots and Observe; build separately amortized; no sleeps",
 	}
 	b, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {

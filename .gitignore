@@ -10,6 +10,10 @@
 /results/
 /data/generated/
 
+# Local projection exports; authored configurations and test fixtures stay tracked.
+/projections.json
+/projections-*.json
+
 # Go binaries, test executables, coverage and profiling output.
 /semcache
 /bin/
@@ -18,7 +22,9 @@
 *.test
 *.out
 *.prof
-/coverage/
+*.pprof
+*.trace
+/coverage
 /coverage.*
 
 # Local environment files; example configuration may be committed.

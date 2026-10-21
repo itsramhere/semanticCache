@@ -2,6 +2,7 @@ package semanticcache
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 )
@@ -69,6 +70,7 @@ type ReplayRun struct {
 	BuildNS            int64            `json:"build_ns"`
 	MemoryBytes        int64            `json:"predictor_memory_bytes"`
 	FinalState         CacheSnapshot    `json:"final_state"`
+	Projections        *Projections     `json:"projections,omitempty"`
 }
 
 type fixtureEmbedder struct {
@@ -112,6 +114,14 @@ func Replay(ctx context.Context, c Config, w Workload, o ReplayOptions, p Replay
 		return run, fmt.Errorf("configuration/workload embedding identity mismatch")
 	}
 	run.PredictorID = p.ID()
+	if summary, ok := p.(*LSHSummary); ok {
+		b, _ := json.Marshal(summary.projections)
+		var owned Projections
+		if err := json.Unmarshal(b, &owned); err != nil {
+			return run, err
+		}
+		run.Projections = &owned
+	}
 	clock := &LogicalClock{Time: w.Requests[0].Request.Timestamp}
 	initial := CacheSnapshot{Entries: []SnapshotEntry{}}
 	labels := map[string]answerLabel{}
@@ -136,6 +146,11 @@ func Replay(ctx context.Context, c Config, w Workload, o ReplayOptions, p Replay
 	ready := p.Reset(w.Identity, initialState) == nil
 	run.BuildNS = time.Since(start).Nanoseconds()
 	run.MemoryBytes = p.MemoryBytes()
+	// End-to-end LSH mutations synchronously maintain occupancy before another
+	// decision. Isolation continues to consume authoritative snapshot updates.
+	if summary, ok := p.(*LSHSummary); ok && o.Mode == "end-to-end" {
+		b.Cache = &SynchronizedCache{cache: cache, summary: summary}
+	}
 	for i, labeled := range w.Requests {
 		if err := ctx.Err(); err != nil {
 			return run, err
@@ -192,11 +207,14 @@ func Replay(ctx context.Context, c Config, w Workload, o ReplayOptions, p Replay
 		row.PostState = cache.Snapshot()
 		updateState := cache.Snapshot()
 		start = time.Now()
-		if err := p.Observe(updateState); err != nil {
-			ready = false
+		if _, synchronized := b.Cache.(*SynchronizedCache); !synchronized {
+			if err := p.Observe(updateState); err != nil {
+				ready = false
+			}
 		}
-		row.Result.Timings.UpdateNS = time.Since(start).Nanoseconds()
-		row.Result.Timings.TotalNS += row.Result.Timings.UpdateNS
+		updateNS := time.Since(start).Nanoseconds()
+		row.Result.Timings.UpdateNS += updateNS
+		row.Result.Timings.TotalNS += updateNS
 		if memory := p.MemoryBytes(); memory > run.MemoryBytes {
 			run.MemoryBytes = memory
 		}

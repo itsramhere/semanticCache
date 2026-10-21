@@ -97,7 +97,7 @@ type Metrics struct {
 }
 
 func Summarize(c Config, run ReplayRun) (Metrics, error) {
-	m := Metrics{PredictorID: run.PredictorID, Mode: run.Options.Mode, Requests: len(run.Rows), DiagnosticSearches: run.DiagnosticSearches, BuildNS: run.BuildNS, BuildAmortizationRequests: len(run.Rows), MemoryBytes: run.MemoryBytes, PeakRebuildMemory: "N/A; no rebuild implementation in Phase 2", ProcessMemory: "N/A; not measured", CostComponentsUSD: map[string]float64{}, CostBoundary: "simulated per-operation assumptions plus measured local serving/build wall time converted using simulated CPU rate; excludes diagnostics, snapshots and logging; Phase 2 local fixture only"}
+	m := Metrics{PredictorID: run.PredictorID, Mode: run.Options.Mode, Requests: len(run.Rows), DiagnosticSearches: run.DiagnosticSearches, BuildNS: run.BuildNS, BuildAmortizationRequests: len(run.Rows), MemoryBytes: run.MemoryBytes, PeakRebuildMemory: "N/A; not measured", ProcessMemory: "N/A; not measured", CostComponentsUSD: map[string]float64{}, CostBoundary: "simulated per-operation assumptions plus measured local serving/build wall time converted using simulated CPU rate; includes synchronous maintenance snapshots; excludes diagnostics, evaluation snapshots and logging; local fixture only"}
 	if err := c.Validate(); err != nil {
 		return m, err
 	}

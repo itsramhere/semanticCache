@@ -1,0 +1,12 @@
+{
+  "version": "cosine-hyperplanes-v1",
+  "identity": {
+    "model": "simulated-faq-geometry",
+    "revision": "v1",
+    "dimension": 64,
+    "preprocessing": "trim-unicode-preserve-case-whitespace-l2-v1"
+  },
+  "seed": 1001,
+  "tables": 2,
+  "bits": 8
+}

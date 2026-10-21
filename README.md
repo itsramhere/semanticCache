@@ -2,14 +2,14 @@
 
 A Go prototype for reusing answers to semantically similar FAQ requests. Requests are embedded as vectors, matched against a scoped cache, and served from the cache only after the stored answer passes validation. A miss generates a new answer and caches it when eligible.
 
-The research goal is to determine whether a local predictor can skip unproductive semantic-cache searches cheaply enough to reduce total serving cost. **Phases 1 and 2 are implemented:** the baseline, validated synthetic workloads, read-only oracle, paired replay modes, and checked metrics. The LSH predictor is planned for Phase 3.
+The research goal is to determine whether a local predictor can skip unproductive semantic-cache searches cheaply enough to reduce total serving cost. **Phases 1 through 3 are implemented:** the baseline, validated synthetic workloads, read-only oracle, paired replay modes, checked metrics, and a counted LSH predictor with synchronous cache maintenance.
 
 ## How it works
 
 ```text
-Request -> embed -> search eligible entries -> validate match
-                                              | valid: return cached answer
-                                              | miss/rejected: generate -> cache if eligible
+Request -> embed -> baseline: search, or LSH: predict -> search if allowed
+                                                        | match: validate -> return cached answer if valid
+                                                        | miss/rejected/skipped: generate -> cache if eligible
 ```
 
 Noncacheable requests still compute an embedding and generate an answer, but bypass cache reuse and insertion. The fake LLM produces deterministic simulated answers; it does not call a real language model.
@@ -145,6 +145,82 @@ answer classes and scope, separately from vector-match routing recall. The
 near-match fixtures deliberately expose incorrect reuse despite a vector hit.
 These checks establish evaluation behavior, without a predictor benefit claim.
 
+## Phase 3: LSH predictor
+
+Persist seeded projections, then include the predictor in a development replay:
+
+```powershell
+go run ./cmd/semcache build-data -seed 101
+go run ./cmd/semcache build-projections -config configs/lsh_development.json -output results/phase3/projections.json
+go run ./cmd/semcache replay -data data/generated/development-101.json -lsh results/phase3/projections.json -mode end-to-end -start warm -output results/phase3/end-to-end-warm
+```
+
+Use `-mode isolation` to evaluate against authoritative baseline snapshots, and
+`-start cold` for an empty initial cache. Omit `-lsh` to replay only the controls.
+The example configuration uses two tables, eight bits and projection seed 1001;
+it is a development implementation check, not a tuned or frozen final candidate.
+`build-projections` accepts `-config` and `-output`. Its strict JSON config contains
+`version` (`cosine-hyperplanes-v1`), full embedding `identity`, `seed`, `tables`
+(1–256), and `bits` (1–64), with a 16-million-coefficient resource limit.
+
+Hashing normalizes vectors, sets bit b when its hyperplane dot product is >= 0,
+and probes one bucket per table. Any occupied bucket permits a search; empty
+buckets permit a bypass. Keys contain the full scope, projection identity, table
+and bucket. The identity hashes configuration and actual coefficients. Saved
+projection files are reloaded without regeneration and are included in replay
+checksums alongside the seed, workload and source identity.
+
+If a dot product falls within the float64 roundoff bound (eight machine epsilons
+per dimension times the sum of absolute products), prediction searches with
+`hash-boundary-fallback`. This protects exact repeats when normalization changes
+the last bits near a hyperplane; stored keys still use the documented >= 0 rule.
+
+Occupancy uses counts and entry-to-key bookkeeping so shared buckets survive
+deletion of one contributor. The end-to-end serving path uses one serialized
+cache/summary mutation path for inserts, replacements, deletes, revocation,
+expiration and FIFO eviction. Prediction reads only the local summary. Unready
+summaries and hashing failures search; maintenance failures immediately disable
+skipping until `SynchronizedCache.Rebuild()` succeeds. Initial construction builds
+the summary before enabling it. Programmatic callers transfer cache ownership to
+`NewSynchronizedCache`, then set `Baseline.Cache` and `Baseline.Predictor` to that
+wrapper and its summary; all mutations must go through the wrapper. Isolation
+mode consumes the harness's authoritative snapshot stream instead.
+Serving also checks the summary's full embedding identity and its association
+with the active cache. A mismatch searches with an explicit fallback reason.
+
+Synchronous maintenance, including its snapshot copying, is charged to update
+time and serving cost. Memory is a conservative structural estimate including
+projections, vectors, entry ledger, keys, strings and map/container allowances;
+retained heap, rebuild peak and process memory await Phase 4 measurement.
+
+LSH can skip real semantic matches. A regression separates vectors `(0.1, 1)`
+and `(-0.1, 1)` using the x=0 plane despite cosine similarity about 0.98. The
+development warm replay also records missed hits in per-request JSONL and
+confusion metrics. These controlled vectors and simulated costs do not establish
+real embedding quality or a benefit. Tuning and final evaluation remain pending.
+
+Phase 3 implementation and debugging checks are complete. The audit passed
+tests, vet, race detection, build, and 24 development replay conditions across
+workload seeds 101/202/303, both modes, warm/cold starts, and capacities 100/1000:
+72 router runs and 7,200 requests, with zero serving or cache-write failures.
+Regression tests cover unsynchronized and incompatible-summary fallback,
+floating-point exact-repeat misses, and recovery after maintenance failure.
+
+The current development configuration does **not** meet the provisional 99%
+cache-hit recall target. Its end-to-end results across those workload seeds are:
+
+| Initial cache | LSH hit recall | Searches: baseline / LSH | Generations: baseline / LSH |
+| --- | --- | --- | --- |
+| Warm | 97.14% | 90 / 70 | 30 / 32 |
+| Cold | 96.67% | 90 / 61-62 | 40 / 42 |
+
+Counts are per 100-request run, with 90 cache-eligible requests. Every end-to-end
+LSH run increases simulated serving cost under the saved assumptions. Isolation
+recall can differ because it follows baseline cache updates; cold seed 303
+records 90% recall. Passing implementation checks establishes Phase 3 behavior;
+it does not establish a useful recall/cost tradeoff. Phase 4 will tune that tradeoff
+using tuning data before any held-out final evaluation.
+
 ## Live embeddings
 
 The Go HTTP adapter supports a [Hugging Face TEI server](https://huggingface.co/docs/text-embeddings-inference/quick_tour). Configure the server with:
@@ -170,7 +246,7 @@ go test ./... -count=1
 go vet ./...
 ```
 
-Tests cover cache lifecycle and scope isolation, similarity boundaries and ties, malformed embeddings, cancellation, backend/generation/write failures, HTTP protocol behavior, deterministic replay, CLI results, and manifest hashes.
+Tests cover cache lifecycle and scope isolation, similarity boundaries and ties, malformed embeddings, cancellation, backend/generation/write failures, HTTP protocol behavior, deterministic replay, CLI results, and manifest hashes. LSH tests also cover persisted projections, counted shared buckets, replacement/removal, all 64 hash bits, input ownership, numerical and configuration fallbacks, maintenance failure/rebuild, and oracle sampling/logging invariance.
 
 For race detection on Windows with MSYS2 UCRT64 GCC installed at `C:\msys64`, use these settings in the current PowerShell session:
 
@@ -181,7 +257,7 @@ $env:CGO_ENABLED = '1'
 go test -race ./... -count=1
 ```
 
-Adjust the compiler path for your installation. The Phase 1 tests, vet checks, build, demo, and race-detector tests passed on Windows/amd64 with Go 1.26.3 and GCC 15.2.0. HTTP integration tests cover the complete adapter path; a Docker TEI deployment was not exercised.
+Adjust the compiler path for your installation. Tests, vet checks, build, demo, and race-detector tests through Phase 3 passed on Windows/amd64 with Go 1.26.3 and GCC 15.2.0. HTTP integration tests cover the complete adapter path; a Docker TEI deployment was not exercised.
 
 ## Measurement boundaries
 
@@ -194,13 +270,19 @@ The demo establishes baseline behavior. It does not establish answer correctness
 ```text
 cmd/semcache/                  CLI and command integration tests
 configs/experiment.json        Matching policy and experiment settings
+configs/phase2_fixture.json    Controlled evaluation configuration
+configs/lsh_development.json   Development LSH projection configuration
+data/catalog.json              Authored QA groups and split definitions
+data/README.md                 Data origin and generation instructions
 internal/semanticcache/        Cache, router, adapters, contracts, and tests
 internal/semanticcache/testdata/ Recorded real embedding fixture
 go.mod                        Go module and toolchain requirement
 ```
 
-Generated datasets, runs, binaries, coverage files, and the original local planning/progress Markdown files are ignored by Git. The authored catalog, generator, configuration, and public documentation are tracked.
+Generated datasets, runs, local projection exports, binaries, coverage/profiling files, and the original local planning/progress Markdown files are ignored by Git. Keep replay outputs under `results/`; recreate them using the commands above. The authored catalog, generator, configurations, regression fixtures, and public documentation are tracked.
 
 ## Planned work
 
-The next phase adds an LSH bucket-occupancy predictor. Later phases cover lifecycle synchronization, recall/memory/cost tuning, remote-cache comparisons, and a reproducible final evaluation. These components are not implemented yet.
+The next phase tunes the LSH recall/memory/cost tradeoff and freezes a candidate.
+Later phases cover event ordering and delayed updates, remote-cache comparisons,
+and a reproducible final evaluation. These components are not implemented yet.

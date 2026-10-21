@@ -63,6 +63,7 @@ type Result struct {
 	WriteCount      int              `json:"write_count"`
 	Error           string           `json:"error,omitempty"`
 	CacheWriteError string           `json:"cache_write_error,omitempty"`
+	SummaryError    string           `json:"summary_error,omitempty"`
 	Timings         StageTimings     `json:"timings"`
 	Embedding       *EmbeddingRecord `json:"embedding,omitempty"`
 	Decision        *Decision        `json:"decision,omitempty"`
@@ -77,16 +78,29 @@ type Baseline struct {
 	Threshold float64
 	// A fixed identity prevents embeddings from different models sharing a cache.
 	Identity      EmbeddingIdentity
+	Predictor     *LSHSummary
 	lastTimestamp time.Time
 }
 
 func (b *Baseline) Serve(ctx context.Context, r Request) (result Result) {
+	if b.Predictor != nil {
+		return b.serve(ctx, r, func(v []float64) Decision {
+			cache, ok := b.Cache.(*SynchronizedCache)
+			if !ok || cache.summary != b.Predictor {
+				return Decision{true, "unsynchronized-summary-fallback", b.Predictor.ID()}
+			}
+			if b.Predictor.projections.Config.Identity != b.Identity {
+				return Decision{true, "summary-identity-mismatch-fallback", b.Predictor.ID()}
+			}
+			return b.Predictor.Predict(r, v)
+		}, nil)
+	}
 	return b.serve(ctx, r, nil, nil)
 }
 
 // serve shares production validation and generation between replay controls.
 // Diagnostic work runs after embedding and before the decision, and is excluded
-// from serving timing. The public Phase 1 path remains always-search.
+// from serving timing. A nil predictor keeps the always-search baseline.
 func (b *Baseline) serve(ctx context.Context, r Request, predict func([]float64) Decision, diagnose func([]float64) error) (result Result) {
 	start := time.Now()
 	var diagnosticNS int64
@@ -95,6 +109,11 @@ func (b *Baseline) serve(ctx context.Context, r Request, predict func([]float64)
 	result.GenerationKind = "simulated-fake-llm"
 	result.Timings.Source = "measured-wall-clock"
 	defer func() { result.Timings.TotalNS = time.Since(start).Nanoseconds() - diagnosticNS }()
+	defer func() {
+		if c, ok := b.Cache.(*SynchronizedCache); ok && c.MaintenanceError() != nil {
+			result.SummaryError = c.MaintenanceError().Error()
+		}
+	}()
 	fail := func(err error) Result { result.Error = err.Error(); return result }
 	if err := ctx.Err(); err != nil {
 		return fail(err)
@@ -118,6 +137,14 @@ func (b *Baseline) serve(ctx context.Context, r Request, predict func([]float64)
 		return fail(fmt.Errorf("request time moved backward"))
 	}
 	b.lastTimestamp = r.Timestamp
+	if cache, ok := b.Cache.(*SynchronizedCache); ok {
+		stage := time.Now()
+		_, err := cache.Expire()
+		result.Timings.UpdateNS += time.Since(stage).Nanoseconds()
+		if err != nil {
+			return fail(fmt.Errorf("expiration: %w", err))
+		}
+	}
 	stage := time.Now()
 	result.EmbeddingCount++
 	v, err := b.Embedder.Embed(ctx, r.Text)
@@ -205,6 +232,10 @@ func (b *Baseline) serve(ctx context.Context, r Request, predict func([]float64)
 		stage = time.Now()
 		err = b.Cache.Put(ctx, entry)
 		result.Timings.CacheWriteNS = time.Since(stage).Nanoseconds()
+		if cache, ok := b.Cache.(*SynchronizedCache); ok {
+			result.Timings.CacheWriteNS -= cache.lastUpdateNS
+			result.Timings.UpdateNS += cache.lastUpdateNS
+		}
 		if err != nil {
 			result.CacheWriteError = err.Error()
 		} else {

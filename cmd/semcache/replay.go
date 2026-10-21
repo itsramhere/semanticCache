@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -22,6 +23,7 @@ func replay(args []string, out, errOut io.Writer) int {
 	capacity := fs.Int("capacity", 100, "global cache capacity")
 	oracleEvery := fs.Int("oracle-every", 1, "diagnose every Nth request; 0 disables oracle")
 	oracleLogging := fs.Bool("oracle-log", true, "save diagnostic labels")
+	projectionPath := fs.String("lsh", "", "optional persisted projection JSON to include an LSH predictor")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -48,8 +50,31 @@ func replay(args []string, out, errOut io.Writer) int {
 	}
 	o := semanticcache.ReplayOptions{Mode: *mode, Start: *start, Capacity: *capacity, OracleEvery: *oracleEvery, OracleLogging: *oracleLogging}
 	var runs []semanticcache.ReplayRun
-	for _, search := range []bool{true, false} {
-		run, err := semanticcache.Replay(context.Background(), c, w, o, &semanticcache.ConstantPredictor{Search: search})
+	predictors := []semanticcache.ReplayPredictor{&semanticcache.ConstantPredictor{Search: true}, &semanticcache.ConstantPredictor{Search: false}}
+	if *projectionPath != "" {
+		pb, err := os.ReadFile(*projectionPath)
+		if err != nil {
+			return fail(err)
+		}
+		var metadata semanticcache.Projections
+		if err := json.Unmarshal(pb, &metadata); err != nil {
+			return fail(err)
+		}
+		if metadata.Config.Identity != w.Identity {
+			return fail(fmt.Errorf("LSH/workload identity mismatch"))
+		}
+		p, err := semanticcache.LoadProjections(bytes.NewReader(pb), metadata.Config)
+		if err != nil {
+			return fail(err)
+		}
+		s, err := semanticcache.NewLSHSummary(p)
+		if err != nil {
+			return fail(err)
+		}
+		predictors = append(predictors, s)
+	}
+	for _, predictor := range predictors {
+		run, err := semanticcache.Replay(context.Background(), c, w, o, predictor)
 		if err != nil {
 			return fail(err)
 		}

@@ -21,8 +21,9 @@ Commands:
   demo             Replay the baseline; flags: -config, -output, -tei.
   build-data       Build split workloads; flags: -catalog, -output, -seed.
   validate-data    Validate workload JSON paths together, including split leakage.
-  replay           Compare controls; requires -data; flags: -config, -output,
-                   -mode, -start, -capacity, -oracle-every, -oracle-log.
+  build-projections Persist seeded LSH planes; flags: -config, -output.
+  replay           Compare controls and optional LSH; requires -data; flags: -config, -output,
+                   -mode, -start, -capacity, -oracle-every, -oracle-log, -lsh.
   version          Print module path, Go toolchain, and source revision.
   verify-policy    Execute the machine-checkable examples from docs/cache_policy.md.
   validate-config  Check a JSON experiment configuration:
@@ -30,7 +31,7 @@ Commands:
   help             Print this message.
 
 Phase 1 supplies the baseline. Phase 2 supplies controlled workload evaluation.
-The LSH predictor arrives in Phase 3.
+Phase 3 supplies the counted LSH predictor and synchronous maintenance.
 `
 
 func main() {
@@ -46,6 +47,8 @@ func run(args []string, out, errOut io.Writer) int {
 		return 0
 	}
 	switch args[0] {
+	case "build-projections":
+		return buildProjections(args[1:], out, errOut)
 	case "replay":
 		return replay(args[1:], out, errOut)
 	case "build-data", "validate-data":
