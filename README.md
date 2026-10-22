@@ -2,7 +2,11 @@
 
 A Go prototype for reusing answers to semantically similar FAQ requests. Requests are embedded as vectors, matched against a scoped cache, and served from the cache only after the stored answer passes validation. A miss generates a new answer and caches it when eligible.
 
-The research goal is to determine whether a local predictor can skip unproductive semantic-cache searches cheaply enough to reduce total serving cost. **Phases 1 through 6 have passed implementation, debugging and test checks within the documented prototype scope:** the baseline, validated synthetic workloads, read-only oracle, paired replay modes, counted LSH predictor, tuning measurements, a frozen candidate decision, lifecycle recovery, a Qdrant adapter and reproducible remote cost/break-even accounting. No LSH family passed every frozen tuning constraint; the selected serving configuration uses always-search. The Phase 6 loopback development experiment saved two searches per 80 requests with exploratory LSH, but increased total routing time. Its lower modelled cost depends on simulated prices. The experiments have not demonstrated a production performance benefit. Phase 7 final evaluation and handoff remain.
+The research goal is to determine whether a local predictor can skip unproductive semantic-cache searches cheaply enough to reduce total serving cost. **Phases 1 through 7 are implemented within the documented prototype scope**, including final evaluation and operating instructions. No LSH family passed every frozen tuning constraint; the serving candidate uses always-search. Two complete final executions reproduced 216 runs and 82,380 request observations each. The frozen candidate preserved available hits, saved no lookups and made the same generation calls as its baseline. Diagnostic LSH saved searches in miss-heavy stresses but lost hits and added maintenance overhead. Monetary costs and model latencies remain simulated; loopback HTTP/routing time is measured. No production benefit is established.
+
+The Phase 7 debugging audit fixed six evidence/timing-validation gaps and added failing-before/passing-after regressions. Full live tests, build, vet and race checks pass; combined test coverage is 80.1%. Both original final captures pass the stronger verifier, with unchanged results and frozen candidate.
+
+This README contains the setup, results and reproduction commands for a fresh checkout. Detailed reports, result summaries and progress records are kept locally under `docs/`; the entire folder is ignored by Git. Evaluation commands recreate complete evidence under `results/`.
 
 ## How it works
 
@@ -199,8 +203,8 @@ LSH can skip real semantic matches. A regression separates vectors `(0.1, 1)`
 and `(-0.1, 1)` using the x=0 plane despite cosine similarity about 0.98. The
 development warm replay also records missed hits in per-request JSONL and
 confusion metrics. These controlled vectors and simulated costs do not establish
-real embedding quality or a benefit. Phase 4 tuning is reported below; final
-evaluation remains pending.
+real embedding quality or a benefit. Phase 4 tuning is reported below; the
+subsequent frozen final evaluation is reported in Phase 7.
 
 Phase 3 implementation and debugging checks are complete. The audit passed
 tests, vet, race detection, build, and 24 development replay conditions across
@@ -247,7 +251,8 @@ bits achieved perfect recall but failed paired p95 seven times. No family passed
 every constraint. Frozen budgets remain 99% recall, 8 MiB summary memory,
 1200 ms p95, non-increasing paired p95 and strictly lower paired cost.
 These controlled vectors and simulated cost/latency inputs do not establish
-production benefit. Final evaluation remains unopened.
+production benefit. Final evaluation stayed unopened through selection; Phase 7
+subsequently evaluated the unchanged frozen candidate.
 
 `tradeoffs.csv`, `sweep.json`, assessments and per-request evidence record every
 condition. Memory includes projections and entry bookkeeping, with independent
@@ -258,8 +263,8 @@ separately from replays:
 go test ./internal/semanticcache -run '^$' -bench BenchmarkLSHTuning -benchmem -benchtime 100ms -count 3
 ```
 
-See the [tuning report](docs/phase4_tuning.md) for measured results, exact
-boundaries and selection rationale. `-candidate` includes frozen experiment
+The saved tuning artifacts contain measured results, boundaries and the selection
+rationale. `-candidate` includes frozen experiment
 settings and all projection seeds; omit `-config` and `-lsh` when using it.
 Candidate replays save the exact candidate JSON and its checksum. Freezing refuses
 to overwrite an existing candidate file.
@@ -274,7 +279,8 @@ sweep. Verification runs offline during freezing and does not change serving.
 
 Tests, vet, build, race detection, eight development-only fallback replay
 conditions and all 108 benchmark samples passed. The original frozen candidate
-is preserved, and held-out final evaluation remains unopened.
+is preserved. Held-out evaluation remained unopened through that audit and was
+subsequently completed in Phase 7.
 
 ## Phase 5: lifecycle events and delayed updates
 
@@ -310,9 +316,7 @@ sharing mutable payloads with queued deliveries. Focused regressions reproduced
 each failure before its fix. Tests, vet, build and race detection passed.
 
 These fixtures use simulated 2D vectors, logical update delay and fake generation.
-The frozen always-search candidate is unchanged. See the
-[Phase 5 report](docs/phase5_churn.md) for reproduction settings, event/recovery
-contracts, results and measurement limits. The new output directory contains
+The frozen always-search candidate is unchanged. The new output directory contains
 config/workload/projections, JSONL/CSV traces, metrics, rebuild measurements and
 a source/artifact checksum manifest. `churn` accepts `-config` and `-output`.
 
@@ -352,7 +356,7 @@ $env:CGO_ENABLED = '1'
 go test -race ./... -count=1
 ```
 
-Adjust the compiler path for your installation. Tests, vet checks, build, demo, and race-detector tests through Phase 6 passed on Windows/amd64 with Go 1.26.3 and GCC 15.2.0. Phase 4 tests cover tuning boundaries, complete seed matrices, grid and variant metadata, checksum rejection, every row's evidence, request-derived metrics, candidate selection and frozen fallback replay. Phase 5 tests add duplicate/stale event handling, reset barriers, delayed-update attribution, publication-time freshness, future-dated recovery rejection, scheduler payload ownership, and rebuild catch-up with intervening mutations. Phase 6 tests cover live Qdrant/reference parity, explicit backend errors and timeouts, completed-write confirmation, malformed-query rejection, validated cost accounting, CLI evidence hashes and exact offline accounting reproduction. HTTP integration tests cover the complete adapter path; a Docker TEI deployment was not exercised.
+Adjust the compiler path for your installation. Tests, vet checks, build, demo, and race-detector tests through Phase 7 passed on Windows/amd64 with Go 1.26.3 and GCC 15.2.0. Phase 4 tests cover tuning boundaries, complete seed matrices, grid and variant metadata, checksum rejection, every row's evidence, request-derived metrics, candidate selection and frozen fallback replay. Phase 5 tests add duplicate/stale event handling, reset barriers, delayed-update attribution, publication-time freshness, future-dated recovery rejection, scheduler payload ownership, and rebuild catch-up with intervening mutations. Phase 6 tests cover live Qdrant/reference parity, explicit backend errors and timeouts, completed-write confirmation, malformed-query rejection, validated cost accounting, CLI evidence hashes and exact offline accounting reproduction. Phase 7 adds stress contracts, delayed recovery, memory guarding, HTTP/CPU accounting, complete matrix evidence verification, clean replay and offline rebuild checks. HTTP integration tests cover the complete adapter path; a Docker TEI deployment was not exercised.
 
 ## Measurement boundaries
 
@@ -362,7 +366,32 @@ The demo establishes baseline behavior. It does not establish answer correctness
 
 ## Phase 6: remote cache experiments
 
-For remote setup, paired replay, offline cost reconciliation, measurement boundaries and results, see [Phase 6 remote experiments](docs/phase6_remote.md). With Qdrant listening on loopback port 16333:
+The adapter and final matrix use Qdrant 1.19.2. For a new local Windows backend,
+run from the repository root, using a fresh output directory:
+
+```powershell
+$backendDir = Join-Path (Get-Location) 'results/qdrant-local'
+New-Item -ItemType Directory -Path $backendDir | Out-Null
+Invoke-WebRequest -Uri https://github.com/qdrant/qdrant/releases/download/v1.19.2/qdrant-x86_64-pc-windows-msvc.zip -OutFile "$backendDir/qdrant.zip" -UseBasicParsing
+Expand-Archive -LiteralPath "$backendDir/qdrant.zip" -DestinationPath $backendDir
+@'
+log_level: WARN
+storage:
+  storage_path: ./storage
+  snapshots_path: ./snapshots
+service:
+  host: 127.0.0.1
+  http_port: 16333
+  grpc_port: 16334
+telemetry_disabled: true
+'@ | Set-Content "$backendDir/config.yaml" -Encoding UTF8
+$qdrantProcess = Start-Process -FilePath "$backendDir/qdrant.exe" -ArgumentList '--config-path','config.yaml' -WorkingDirectory $backendDir -WindowStyle Hidden -PassThru
+```
+
+After startup, `Invoke-RestMethod http://127.0.0.1:16333/` must report version
+1.19.2. Keep this backend running while executing remote commands. Run full normal
+and race suites sequentially so package discovery does not encounter temporary
+backend storage being removed by another suite. With Qdrant ready:
 
 ```powershell
 $env:SEMCACHE_QDRANT_URL = 'http://127.0.0.1:16333'
@@ -384,7 +413,125 @@ rejection of invalid accounting measurements, with regression and CLI evidence
 tests. Three fresh paired development replays verified 480 requests and exact
 offline accounting reproduction. LSH saved two searches per 80 requests while
 increasing paired total measured latency; monetary savings remain simulated.
-See the [audit results](docs/phase6_remote.md#phase-6-debugging-audit-2026-10-22).
+
+The adapter uses exact search, rescoring original float64 payload vectors after
+Qdrant's float32 storage. Scope, TTL/FIFO and answer validation follow the reference
+policy. Backend errors fail explicitly. Each run creates and removes its own
+collection; it does not reopen existing collections or support external writers.
+These loopback measurements do not establish WAN, ANN or production performance.
+After all remote tests and replays finish, stop the backend started above with
+`Stop-Process -Id $qdrantProcess.Id`.
+
+## Phase 7: final evaluation and handoff
+
+With Go installed, generate the three declared data orders and start the pinned
+Qdrant loopback backend using the setup instructions above:
+
+```powershell
+go run ./cmd/semcache build-data -seed 101
+go run ./cmd/semcache build-data -seed 202
+go run ./cmd/semcache build-data -seed 303
+go run ./cmd/semcache final-evaluate -output results/my-final
+```
+
+The full evaluation covers 21 scenarios: local/remote, both comparison modes,
+warm/cold, capacities 100/1000, low/high hits, all-hit/all-miss/empty, churn,
+fresh/delayed updates and a filled-cache memory guard. Each condition uses the
+frozen candidate and a paired independent baseline. Named LSH stress diagnostics
+use the unchanged development configuration across the full three-by-three seed
+family; they do not replace the candidate.
+
+The baseline and candidate each served 36,276 requests, made 32,818 searches and
+8,449 fake generations, with zero missed hits. Diagnostic stress runs recorded
+50 missed hits (44 intrinsic, six unseen updates), six stale-removal searches
+and 1,704 fallbacks. Every final summary reconciled; no serving/write/HTTP
+failures or backend/reference discrepancies occurred. Routing recall does not
+validate answers: original warm final streams incorrectly reused 100 labeled
+near-matches per 1,000 requests. The generated `results.csv`, `results.json` and
+`aggregates.json` retain each condition's budget violations, cost, timings and
+memory, including descriptive variability across seeds.
+
+To reproduce the clean replay check:
+
+```powershell
+go run ./cmd/semcache final-evaluate -output results/my-clean-replay
+go run ./cmd/semcache final-verify -input results/my-final -replay results/my-clean-replay
+```
+
+Every output directory must be new. Verification runs offline and reconstructs
+metrics, budgets and tables from complete traces. Both recorded captures reproduce
+confusion/call/reuse/fault counts and final states exactly; measured timings,
+CPU-priced cost contributions and process memory vary. Verification reconstructs
+both captures' complete tables, binds workload/projection identities to the
+frozen plan, checks each request's timing boundaries and compares request-level
+responses, decisions, updates and fault evidence. It normalizes measured durations
+and independently owned collection names.
+
+The original captures used workload seeds 101/202/303 and diagnostic projection
+seeds 1001/2002/3003. The frozen budgets are 99% recall when hits exist, 1,200 ms
+absolute p95, non-increasing paired p95, strictly lower paired cost and an 8 MiB
+summary. Diagnostic recall failed in 27 runs, paired cost in 33 and paired p95 in
+45; eighteen diagnostic no-hit runs retain `N/A` recall. All absolute p95/memory
+budgets passed. The filled-cache diagnostic summary estimate was 3,641,603 bytes,
+independent retained LSH heap 1,816,480-1,816,496 bytes and rebuild overlap estimate
+7,283,014 bytes. A 1,024-byte stress guard forced all 108 diagnostic memory-case
+decisions to search while retaining the summary. This guard does not replace the
+frozen budget. No confidence interval or statistical significance is claimed.
+
+For a small explicit predictor replay and offline summary rebuild:
+
+```powershell
+go run ./cmd/semcache build-projections -output results/handoff-projections.json
+go run ./cmd/semcache replay -data data/generated/development-101.json -lsh results/handoff-projections.json -start warm -output results/handoff-predictor
+$lshRun = Get-ChildItem -Path results/handoff-predictor/lsh-*-run.json | Select-Object -ExpandProperty FullName
+go run ./cmd/semcache rebuild -projections results/handoff-projections.json -run $lshRun -output results/handoff-rebuild
+```
+
+The rebuild restores TTL/FIFO metadata and verifies the counted summary from the
+exact saved projections and snapshot. It writes an offline report and source
+inputs. In-process reference serving recovers through `SynchronizedCache.Rebuild()`;
+all cache mutations must go through that wrapper. Delayed recovery uses an
+authoritative watermarked snapshot with `BeginRebuild` and complete reliable
+event catch-up through `FinishRebuild`. Failed recovery keeps search fallback
+enabled. An ambiguous remote write requires a new owned collection.
+
+## CLI and configuration reference
+
+Run `go run ./cmd/semcache help` to list commands; each command's `-h` displays
+its flags and defaults. Final evaluation, verification and rebuild options are:
+
+| Command | Flags |
+| --- | --- |
+| `final-evaluate` | `-plan configs/final_matrix.json`, `-candidate configs/final_candidate.json`, `-data-dir data/generated`, `-endpoint http://127.0.0.1:16333`, `-output results/phase7/final` |
+| `final-verify` | Required `-input DIR`; optional `-replay DIR` |
+| `rebuild` | Required `-projections FILE`, `-run FILE` (LSH replay `*-run.json`), `-output DIR`; `-config configs/phase2_fixture.json` |
+
+Exit codes are 0 for completed execution, 1 for input/operation failure and 2 for
+usage errors. A completed matrix can contain budget failures; inspect the tables.
+Tuning, churn, remote/final evidence, rebuild and candidate freezing require fresh
+output paths. Demo, ordinary replay, data generation and projection export can
+overwrite matching output files.
+
+JSON inputs reject unknown fields and trailing values. Authored configurations
+are runnable examples; their complete typed schemas and validation rules live
+beside the implementation:
+
+| Configuration | Schema and key fields |
+| --- | --- |
+| Experiment | [Config](internal/semanticcache/config.go): IDs, `policy`, `embedding`, request count, distinct workload/projection seeds, recall/p95/memory budgets, five simulated per-operation `assumptions` |
+| LSH | [LSHConfig](internal/semanticcache/lsh.go): version, full embedding identity, seed, `tables` (1-256), `bits` (1-64); persisted projections add actual `planes` |
+| Tuning grid | [TuningGrid](internal/semanticcache/tuning.go): ID, table/bit arrays, both comparison modes and starts |
+| Frozen candidate | [FinalCandidate](internal/semanticcache/candidate.go): selected router, experiment, embedding/projection identities, tuning assessments, provenance hashes and freeze time |
+| Churn | [ChurnConfig](internal/semanticcache/churn.go): seeds, steps/timing, capacity/TTL, freshness/heartbeat/rebuild limits and transport faults |
+| Final matrix | [FinalPlan](internal/semanticcache/final.go): ID, exact candidate checksum, diagnostic LSH configuration and named scenarios with backend/mode/start/capacity/stream plus optional request count, fill, update delay, diagnostic and guard settings |
+| Workload | [Workload](internal/semanticcache/workload.go): ID/split/seed, origin, embedding identity, groups, warm/empty-cold entries and ordered labeled requests/vectors; see [data generation](data/README.md) |
+
+Every embedding must be finite, nonzero and dimension-compatible. Scope strings
+are case-sensitive and timestamps use UTC. Undefined output metrics are `"N/A"`.
+`replay -candidate` supplies frozen configuration/projections; omit explicit
+`-config` and `-lsh`. Original final streams use the entire declared split;
+separately named stress streams contain 12-1,000 requests. Final evaluation never
+changes the candidate or frozen budgets.
 
 ## Repository layout
 
@@ -396,10 +543,10 @@ configs/lsh_development.json   Development LSH projection configuration
 configs/tuning_grid.json       Recorded Phase 4 table/bit grid
 configs/final_candidate.json   Frozen serving choice and tuning assessments
 configs/churn.json             Seeded controlled lifecycle/update-fault experiment
+configs/final_matrix.json      Predeclared final evaluation/stress conditions
 
-docs/phase4_tuning.md           Tuning results, selection rationale and debugging audit
-docs/phase5_churn.md            Event contract, fault recovery and measured boundaries
-docs/phase6_remote.md           Qdrant semantics, cost reconciliation and break-even results
+docs/                         Local documentation/reports/progress (ignored)
+results/                      Generated evidence, profiles and backend state (ignored)
 data/catalog.json              Authored QA groups and split definitions
 data/README.md                 Data origin and generation instructions
 internal/semanticcache/        Cache, router, adapters, contracts, and tests
@@ -407,11 +554,18 @@ internal/semanticcache/testdata/ Recorded real embedding fixture
 go.mod                        Go module and toolchain requirement
 ```
 
-Generated datasets, tuning sweeps, churn matrices, request/event logs, recovery snapshots, replay/debugging evidence, heap/CPU profiles, local projection exports, binaries, coverage files, and the original local planning/progress Markdown files are ignored by Git. Keep experiment outputs, downloaded Qdrant binaries/archives and backend state under `results/`; recreate them using the commands above. Root-level Qdrant `storage/` and `snapshots/` directories are also ignored. The authored catalog, generator, configurations (including `configs/churn.json`), frozen candidate, regression fixtures, and Phase 4/5/6 reports are tracked. Raw local evidence referenced by the reports and frozen candidate is not included in the checkout; reproduce Phase 6 with the documented backend setup and remote commands, reproduce churn with the saved configuration and documented seed matrix, and reproduce candidate selection with a new tuning sweep or the retained original run directory.
+The entire `docs/` folder is local and ignored, including reports, progress and
+summary CSV/JSON. Previously tracked phase reports are removed from the Git index
+while their local files are preserved. Generated datasets, experiment evidence,
+profiles, local projections, binaries, planning files and backend state are also
+ignored. Keep generated artifacts and downloaded Qdrant files under `results/`;
+root Qdrant `storage/` and `snapshots/` are ignored as well. Source, tests, authored
+catalog/configurations, frozen candidate and this README remain tracked. Recreate
+the full result tables and traces with the documented evaluation commands.
 
-## Planned work
+## Scope and follow-up
 
-Phase 7 remains: the frozen final evaluation matrix and final report/handoff.
-Phase 6 is limited to measured loopback HTTP, a small development stream and
-conditional cost/latency models. It does not establish WAN or production savings,
-and the no-qualifying-candidate finding remains unchanged.
+Required prototype deliverables are complete. The no-qualifying-LSH finding
+remains unchanged. These results motivate follow-up experiments with real held-out
+embeddings, stronger answer-validity calibration, bounded probes and dependable
+update delivery. WAN/production savings remain unestablished.

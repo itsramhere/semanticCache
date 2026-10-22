@@ -65,5 +65,30 @@ func TestPhase3CLIReplay(t *testing.T) {
 		if manifest.Seeds[p.ID()] != 1001 || manifest.Hashes[p.ID()+"-projections.json"] == "" {
 			t.Fatal("missing projection provenance")
 		}
+		if mode == "end-to-end" {
+			rebuilt := filepath.Join(dir, "rebuilt")
+			args := []string{"rebuild", "-config", "../../configs/phase2_fixture.json", "-projections", planes, "-run", filepath.Join(output, p.ID()+"-run.json"), "-output", rebuilt}
+			invoke(args...)
+			b, err := os.ReadFile(filepath.Join(rebuilt, "summary.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var report struct {
+				Ready    bool   `json:"ready"`
+				Checked  int    `json:"verified_reusable_entries"`
+				Sequence uint64 `json:"snapshot_sequence"`
+			}
+			if err = json.Unmarshal(b, &report); err != nil || !report.Ready || report.Checked == 0 || report.Sequence == 0 {
+				t.Fatalf("invalid rebuild: %s %v", b, err)
+			}
+			if code := run(args, &out, &errOut); code != 1 {
+				t.Fatal("rebuild overwrote evidence")
+			}
+			args[6] = filepath.Join(output, "always-search-run.json")
+			args[len(args)-1] = filepath.Join(dir, "unbound-rebuild")
+			if code := run(args, &out, &errOut); code != 1 {
+				t.Fatal("rebuild accepted an unbound projection identity")
+			}
+		}
 	}
 }

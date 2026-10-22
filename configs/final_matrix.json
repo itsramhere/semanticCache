@@ -1,0 +1,32 @@
+{
+  "id": "phase7-frozen-matrix-v1",
+  "candidate_sha256": "2fa91e79e6a1238445758db643dfa3bb3611c5e396ec7e8628e74acd8801b060",
+  "diagnostic_lsh": {
+    "version": "cosine-hyperplanes-v1",
+    "identity": {"model": "simulated-faq-geometry", "revision": "v1", "dimension": 64, "preprocessing": "trim-unicode-preserve-case-whitespace-l2-v1"},
+    "seed": 1001, "tables": 2, "bits": 8
+  },
+  "scenarios": [
+    {"id":"local-A-warm-small","backend":"local","mode":"isolation","start":"warm","capacity":100,"stream":"original"},
+    {"id":"local-A-cold-small","backend":"local","mode":"isolation","start":"cold","capacity":100,"stream":"original"},
+    {"id":"local-A-warm-large","backend":"local","mode":"isolation","start":"warm","capacity":1000,"stream":"original"},
+    {"id":"local-A-cold-large","backend":"local","mode":"isolation","start":"cold","capacity":1000,"stream":"original"},
+    {"id":"local-B-warm-small","backend":"local","mode":"end-to-end","start":"warm","capacity":100,"stream":"original"},
+    {"id":"local-B-cold-small","backend":"local","mode":"end-to-end","start":"cold","capacity":100,"stream":"original"},
+    {"id":"local-B-warm-large","backend":"local","mode":"end-to-end","start":"warm","capacity":1000,"stream":"original"},
+    {"id":"local-B-cold-large","backend":"local","mode":"end-to-end","start":"cold","capacity":1000,"stream":"original"},
+    {"id":"remote-A-warm-small","backend":"remote","mode":"isolation","start":"warm","capacity":100,"stream":"original"},
+    {"id":"remote-B-warm-small","backend":"remote","mode":"end-to-end","start":"warm","capacity":100,"stream":"original"},
+    {"id":"remote-B-cold-large","backend":"remote","mode":"end-to-end","start":"cold","capacity":1000,"stream":"original"},
+    {"id":"high-hit","backend":"local","mode":"end-to-end","start":"warm","capacity":100,"stream":"high-hit","requests":120,"diagnostic":true},
+    {"id":"low-hit","backend":"local","mode":"end-to-end","start":"warm","capacity":100,"stream":"low-hit","requests":120,"diagnostic":true},
+    {"id":"all-hit","backend":"local","mode":"end-to-end","start":"warm","capacity":100,"stream":"all-hit","requests":120,"diagnostic":true},
+    {"id":"all-miss","backend":"local","mode":"end-to-end","start":"cold","capacity":100,"stream":"all-miss","requests":120,"diagnostic":true},
+    {"id":"empty","backend":"local","mode":"end-to-end","start":"cold","capacity":100,"stream":"empty","requests":120,"diagnostic":true},
+    {"id":"local-churn-fresh","backend":"local","mode":"end-to-end","start":"warm","capacity":100,"stream":"churn","requests":120,"diagnostic":true},
+    {"id":"local-churn-delayed","backend":"local","mode":"end-to-end","start":"warm","capacity":100,"stream":"churn","requests":120,"delay_steps":3,"diagnostic":true},
+    {"id":"remote-churn-fresh","backend":"remote","mode":"end-to-end","start":"warm","capacity":100,"stream":"churn","requests":120,"diagnostic":true},
+    {"id":"remote-churn-delayed","backend":"remote","mode":"end-to-end","start":"warm","capacity":100,"stream":"churn","requests":120,"delay_steps":3,"diagnostic":true},
+    {"id":"memory-guard","backend":"local","mode":"end-to-end","start":"warm","capacity":1000,"stream":"high-hit","requests":12,"fill":true,"guard_bytes":1024,"diagnostic":true}
+  ]
+}

@@ -1,16 +1,12 @@
-# Existing local planning and progress documents.
+# Local documentation, planning, reports and progress records.
+/docs/
 /implementation_and_debugging_plan.md
 /semantic_cache_project_summary.md
-/docs/baseline.md
-/docs/cache_policy.md
-/docs/experiment_protocol.md
-/docs/progress.md
 
 # Generated runs: demos, tuning sweeps, paired replays, churn/fault matrices,
 # request/event logs, recovery snapshots, local audit scripts and memory profiles.
-# Keep Phase 5/6 captures, Qdrant downloads/state and debugging evidence in results/.
-# Authored configs (including churn/final_candidate), Phase 4/5/6 reports and
-# regression fixtures stay tracked.
+# Keep captures, Qdrant downloads/state and debugging evidence in results/.
+# Authored configurations, code, regression fixtures and README stay tracked.
 /results/
 /data/generated/
 

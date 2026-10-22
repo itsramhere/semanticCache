@@ -18,6 +18,9 @@ Usage:
   semcache <command> [arguments]
 
 Commands:
+  rebuild          Offline summary rebuild; requires -projections, -run, -output; optional -config.
+  final-evaluate   Frozen final matrix; flags: -plan, -candidate, -data-dir, -endpoint, -output.
+  final-verify     Verify final evidence; flags: -input, -replay (optional clean rerun).
   demo             Replay the baseline; flags: -config, -output, -tei.
   build-data       Build split workloads; flags: -catalog, -output, -seed.
   validate-data    Validate workload JSON paths together, including split leakage.
@@ -39,6 +42,7 @@ Phase 1 supplies the baseline. Phase 2 supplies controlled workload evaluation.
 Phase 3 supplies the counted LSH predictor and synchronous maintenance.
 Phase 4 supplies tuning, memory/CPU measurement, and candidate freezing.
 Phase 5 supplies versioned lifecycle events, fault simulation and reconciliation.
+Phase 6 supplies remote retrieval and cost accounting; Phase 7 supplies final evaluation.
 `
 
 func main() {
@@ -54,6 +58,12 @@ func run(args []string, out, errOut io.Writer) int {
 		return 0
 	}
 	switch args[0] {
+	case "rebuild":
+		return rebuild(args[1:], out, errOut)
+	case "final-evaluate":
+		return finalEvaluate(args[1:], out, errOut)
+	case "final-verify":
+		return finalVerify(args[1:], out, errOut)
 	case "remote-account":
 		return remoteAccount(args[1:], out, errOut)
 	case "remote-demo":
