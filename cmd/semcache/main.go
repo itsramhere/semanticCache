@@ -23,7 +23,9 @@ Commands:
   validate-data    Validate workload JSON paths together, including split leakage.
   build-projections Persist seeded LSH planes; flags: -config, -output.
   replay           Compare controls and optional LSH; requires -data; flags: -config, -output,
-                   -mode, -start, -capacity, -oracle-every, -oracle-log, -lsh.
+                   -mode, -start, -capacity, -oracle-every, -oracle-log, -lsh, -candidate.
+  tune             Sweep tuning data only; flags: -config, -grid, -data-dir, -output.
+  freeze-candidate Freeze a verified tuning choice; flags: -tuning, -output.
   version          Print module path, Go toolchain, and source revision.
   verify-policy    Execute the machine-checkable examples from docs/cache_policy.md.
   validate-config  Check a JSON experiment configuration:
@@ -32,6 +34,7 @@ Commands:
 
 Phase 1 supplies the baseline. Phase 2 supplies controlled workload evaluation.
 Phase 3 supplies the counted LSH predictor and synchronous maintenance.
+Phase 4 supplies tuning, memory/CPU measurement, and candidate freezing.
 `
 
 func main() {
@@ -47,6 +50,10 @@ func run(args []string, out, errOut io.Writer) int {
 		return 0
 	}
 	switch args[0] {
+	case "freeze-candidate":
+		return freezeCandidate(args[1:], out, errOut)
+	case "tune":
+		return tune(args[1:], out, errOut)
 	case "build-projections":
 		return buildProjections(args[1:], out, errOut)
 	case "replay":

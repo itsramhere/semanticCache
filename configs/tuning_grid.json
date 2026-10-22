@@ -1,0 +1,7 @@
+{
+  "id": "phase4-single-bucket-grid-v1",
+  "tables": [1, 2, 4],
+  "bits": [4, 8],
+  "modes": ["isolation", "end-to-end"],
+  "starts": ["warm", "cold"]
+}

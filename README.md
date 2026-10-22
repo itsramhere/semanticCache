@@ -2,7 +2,7 @@
 
 A Go prototype for reusing answers to semantically similar FAQ requests. Requests are embedded as vectors, matched against a scoped cache, and served from the cache only after the stored answer passes validation. A miss generates a new answer and caches it when eligible.
 
-The research goal is to determine whether a local predictor can skip unproductive semantic-cache searches cheaply enough to reduce total serving cost. **Phases 1 through 3 are implemented:** the baseline, validated synthetic workloads, read-only oracle, paired replay modes, checked metrics, and a counted LSH predictor with synchronous cache maintenance.
+The research goal is to determine whether a local predictor can skip unproductive semantic-cache searches cheaply enough to reduce total serving cost. **Phases 1 through 4 are complete, including debugging and tests:** the baseline, validated synthetic workloads, read-only oracle, paired replay modes, counted LSH predictor, tuning measurements and a frozen candidate decision. No LSH family passed every frozen tuning constraint; the selected serving configuration uses always-search. Completing Phase 4 establishes the measured tradeoff, without demonstrating a performance benefit.
 
 ## How it works
 
@@ -191,13 +191,15 @@ with the active cache. A mismatch searches with an explicit fallback reason.
 Synchronous maintenance, including its snapshot copying, is charged to update
 time and serving cost. Memory is a conservative structural estimate including
 projections, vectors, entry ledger, keys, strings and map/container allowances;
-retained heap, rebuild peak and process memory await Phase 4 measurement.
+retained heap and separate process measurements are added by Phase 4. Peak
+memory during rebuilding remains unmeasured.
 
 LSH can skip real semantic matches. A regression separates vectors `(0.1, 1)`
 and `(-0.1, 1)` using the x=0 plane despite cosine similarity about 0.98. The
 development warm replay also records missed hits in per-request JSONL and
 confusion metrics. These controlled vectors and simulated costs do not establish
-real embedding quality or a benefit. Tuning and final evaluation remain pending.
+real embedding quality or a benefit. Phase 4 tuning is reported below; final
+evaluation remains pending.
 
 Phase 3 implementation and debugging checks are complete. The audit passed
 tests, vet, race detection, build, and 24 development replay conditions across
@@ -218,8 +220,60 @@ Counts are per 100-request run, with 90 cache-eligible requests. Every end-to-en
 LSH run increases simulated serving cost under the saved assumptions. Isolation
 recall can differ because it follows baseline cache updates; cold seed 303
 records 90% recall. Passing implementation checks establishes Phase 3 behavior;
-it does not establish a useful recall/cost tradeoff. Phase 4 will tune that tradeoff
+it does not establish a useful recall/cost tradeoff. Phase 4 measures that tradeoff
 using tuning data before any held-out final evaluation.
+
+## Phase 4: tuning and frozen selection
+
+Sweep the recorded grid using tuning data only, then freeze the verified choice:
+
+```powershell
+go run ./cmd/semcache tune -output results/my-tuning
+go run ./cmd/semcache freeze-candidate -tuning results/my-tuning -output results/my-final-candidate.json
+go run ./cmd/semcache replay -candidate results/my-final-candidate.json -data data/generated/development-101.json -mode end-to-end -start warm -output results/frozen-smoke
+```
+
+The sweep requires all declared tuning orders from `build-data` and a new output
+directory. It evaluates 1/2/4 tables with 4/8 bits, three workload seeds, three
+projection seeds, both replay modes, warm/cold starts and capacities 100/1000.
+Controls are always-search, always-skip and exact normalized-vector repeats.
+The repeat reference cannot establish semantic membership. Single-bucket recall
+was adequate for the 4-table/4-bit family, so nearby probing was unnecessary.
+
+The saved [candidate](configs/final_candidate.json) freezes always-search:
+2 tables/4 bits passed 71/72 conditions but failed paired cost once; 4 tables/4
+bits achieved perfect recall but failed paired p95 seven times. No family passed
+every constraint. Frozen budgets remain 99% recall, 8 MiB summary memory,
+1200 ms p95, non-increasing paired p95 and strictly lower paired cost.
+These controlled vectors and simulated cost/latency inputs do not establish
+production benefit. Final evaluation remains unopened.
+
+`tradeoffs.csv`, `sweep.json`, assessments and per-request evidence record every
+condition. Memory includes projections and entry bookkeeping, with independent
+retained-heap profiles and separate whole-process working sets. Run microbenchmarks
+separately from replays:
+
+```powershell
+go test ./internal/semanticcache -run '^$' -bench BenchmarkLSHTuning -benchmem -benchtime 100ms -count 3
+```
+
+See the [tuning report](docs/phase4_tuning.md) for measured results, exact
+boundaries and selection rationale. `-candidate` includes frozen experiment
+settings and all projection seeds; omit `-config` and `-lsh` when using it.
+Candidate replays save the exact candidate JSON and its checksum. Freezing refuses
+to overwrite an existing candidate file.
+
+The debugging audit revalidated all 504 saved tuning conditions and reproduced
+the original selection and assessments. Freezing verifies every row's workload,
+configuration, seed, projection identity and paired baseline, and recomputes
+metrics from the saved request traces. It rejects incomplete evidence, mismatched
+grid or variant metadata, and altered inputs or metrics, even when the changed
+files have been rechecksummed. Captured source identities must agree across the
+sweep. Verification runs offline during freezing and does not change serving.
+
+Tests, vet, build, race detection, eight development-only fallback replay
+conditions and all 108 benchmark samples passed. The original frozen candidate
+is preserved, and held-out final evaluation remains unopened.
 
 ## Live embeddings
 
@@ -257,7 +311,7 @@ $env:CGO_ENABLED = '1'
 go test -race ./... -count=1
 ```
 
-Adjust the compiler path for your installation. Tests, vet checks, build, demo, and race-detector tests through Phase 3 passed on Windows/amd64 with Go 1.26.3 and GCC 15.2.0. HTTP integration tests cover the complete adapter path; a Docker TEI deployment was not exercised.
+Adjust the compiler path for your installation. Tests, vet checks, build, demo, and race-detector tests through Phase 4 passed on Windows/amd64 with Go 1.26.3 and GCC 15.2.0. Phase 4 tests cover tuning boundaries, complete seed matrices, grid and variant metadata, checksum rejection, every row's evidence, request-derived metrics, candidate selection and frozen fallback replay. HTTP integration tests cover the complete adapter path; a Docker TEI deployment was not exercised.
 
 ## Measurement boundaries
 
@@ -272,6 +326,10 @@ cmd/semcache/                  CLI and command integration tests
 configs/experiment.json        Matching policy and experiment settings
 configs/phase2_fixture.json    Controlled evaluation configuration
 configs/lsh_development.json   Development LSH projection configuration
+configs/tuning_grid.json       Recorded Phase 4 table/bit grid
+configs/final_candidate.json   Frozen serving choice and tuning assessments
+
+docs/phase4_tuning.md           Tuning results, selection rationale and debugging audit
 data/catalog.json              Authored QA groups and split definitions
 data/README.md                 Data origin and generation instructions
 internal/semanticcache/        Cache, router, adapters, contracts, and tests
@@ -279,10 +337,12 @@ internal/semanticcache/testdata/ Recorded real embedding fixture
 go.mod                        Go module and toolchain requirement
 ```
 
-Generated datasets, runs, local projection exports, binaries, coverage/profiling files, and the original local planning/progress Markdown files are ignored by Git. Keep replay outputs under `results/`; recreate them using the commands above. The authored catalog, generator, configurations, regression fixtures, and public documentation are tracked.
+Generated datasets, tuning sweeps, replay/debugging evidence, heap/CPU profiles, local projection exports, binaries, coverage files, and the original local planning/progress Markdown files are ignored by Git. Keep experiment outputs under `results/`; recreate them using the commands above. The authored catalog, generator, configurations, frozen candidate, regression fixtures, and public tuning report are tracked. Raw local evidence referenced by the frozen candidate is not included in the checkout; reproducing selection requires generating a new tuning sweep or retaining the original run directory.
 
 ## Planned work
 
-The next phase tunes the LSH recall/memory/cost tradeoff and freezes a candidate.
-Later phases cover event ordering and delayed updates, remote-cache comparisons,
-and a reproducible final evaluation. These components are not implemented yet.
+The next phase covers lifecycle event ordering, delayed updates and reconciliation.
+Later phases add remote-cache comparisons and a reproducible final evaluation.
+These components are not implemented yet. The no-qualifying-candidate finding
+remains valid work: later robustness and break-even analysis can continue without
+claiming savings.

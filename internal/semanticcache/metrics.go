@@ -20,6 +20,21 @@ func (m Metric) MarshalJSON() ([]byte, error) {
 	}
 	return json.Marshal(m.Value)
 }
+func (m *Metric) UnmarshalJSON(b []byte) error {
+	if string(b) == `"N/A"` {
+		*m = Metric{}
+		return nil
+	}
+	var v float64
+	if err := json.Unmarshal(b, &v); err != nil {
+		return err
+	}
+	if !finite(v) || string(b) == "null" {
+		return fmt.Errorf("invalid metric")
+	}
+	*m = Metric{v, true}
+	return nil
+}
 func (m Metric) String() string {
 	if !m.Defined {
 		return "N/A"

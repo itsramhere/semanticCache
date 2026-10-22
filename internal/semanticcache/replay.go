@@ -71,6 +71,7 @@ type ReplayRun struct {
 	MemoryBytes        int64            `json:"predictor_memory_bytes"`
 	FinalState         CacheSnapshot    `json:"final_state"`
 	Projections        *Projections     `json:"projections,omitempty"`
+	MemorySnapshot     CacheSnapshot    `json:"-"` // state at the largest structural estimate
 }
 
 type fixtureEmbedder struct {
@@ -146,6 +147,7 @@ func Replay(ctx context.Context, c Config, w Workload, o ReplayOptions, p Replay
 	ready := p.Reset(w.Identity, initialState) == nil
 	run.BuildNS = time.Since(start).Nanoseconds()
 	run.MemoryBytes = p.MemoryBytes()
+	run.MemorySnapshot = cache.Snapshot()
 	// End-to-end LSH mutations synchronously maintain occupancy before another
 	// decision. Isolation continues to consume authoritative snapshot updates.
 	if summary, ok := p.(*LSHSummary); ok && o.Mode == "end-to-end" {
@@ -208,6 +210,9 @@ func Replay(ctx context.Context, c Config, w Workload, o ReplayOptions, p Replay
 		updateState := cache.Snapshot()
 		start = time.Now()
 		if _, synchronized := b.Cache.(*SynchronizedCache); !synchronized {
+			if _, exact := p.(*ExactRepeat); exact && o.Mode == "end-to-end" {
+				updateState = cache.Snapshot() // serving maintenance for this reference
+			}
 			if err := p.Observe(updateState); err != nil {
 				ready = false
 			}
@@ -217,6 +222,7 @@ func Replay(ctx context.Context, c Config, w Workload, o ReplayOptions, p Replay
 		row.Result.Timings.TotalNS += updateNS
 		if memory := p.MemoryBytes(); memory > run.MemoryBytes {
 			run.MemoryBytes = memory
+			run.MemorySnapshot = row.PostState
 		}
 		run.Rows = append(run.Rows, row)
 	}

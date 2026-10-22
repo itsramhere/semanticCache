@@ -1,0 +1,204 @@
+{
+  "version": "phase4-candidate-v1",
+  "router": "always-search",
+  "fallback_router": "always-search",
+  "status": "no-qualifying-lsh",
+  "selected_variant": "always-search",
+  "experiment": {
+    "id": "phase2-fixture-v1",
+    "policy": {
+      "id": "faq-cosine-v1",
+      "cosine_threshold": 0.9,
+      "ttl_seconds": 3600,
+      "capacity_entries": [
+        100,
+        1000
+      ]
+    },
+    "embedding": {
+      "model": "simulated-faq-geometry",
+      "dimension": 64,
+      "preprocessing": "trim-unicode-preserve-case-whitespace-l2-v1"
+    },
+    "workload_id": "synthetic-helpdesk-v1",
+    "requests_per_split": 1000,
+    "workload_seeds": [
+      101,
+      202,
+      303
+    ],
+    "projection_seeds": [
+      1001,
+      2002,
+      3003
+    ],
+    "min_hit_recall": 0.99,
+    "max_p95_latency_ms": 1200,
+    "max_summary_bytes": 8388608,
+    "assumptions": {
+      "cache_write": {
+        "source": "simulated",
+        "cost_usd": 0.00002,
+        "latency_ms": 2
+      },
+      "embedding": {
+        "source": "simulated",
+        "cost_usd": 0.00001,
+        "latency_ms": 5
+      },
+      "generation": {
+        "source": "simulated",
+        "cost_usd": 0.002,
+        "latency_ms": 1000
+      },
+      "local_cpu_ms": {
+        "source": "simulated",
+        "cost_usd": 1e-8,
+        "latency_ms": 0
+      },
+      "search": {
+        "source": "simulated",
+        "cost_usd": 0.0001,
+        "latency_ms": 20
+      }
+    }
+  },
+  "embedding_identity": {
+    "model": "simulated-faq-geometry",
+    "revision": "v1",
+    "dimension": 64,
+    "preprocessing": "trim-unicode-preserve-case-whitespace-l2-v1"
+  },
+  "projections": null,
+  "projection_ids": null,
+  "assessments": [
+    {
+      "variant": "always-search",
+      "tables": 0,
+      "bits": 0,
+      "conditions": 24,
+      "passing_conditions": 12,
+      "simulated_end_to_end_total_cost_usd": 5.781608652491,
+      "minimum_recall": 1,
+      "maximum_budgeted_summary_bytes": 0,
+      "failure_counts": {
+        "paired-cost": 12
+      }
+    },
+    {
+      "variant": "always-skip",
+      "tables": 0,
+      "bits": 0,
+      "conditions": 24,
+      "passing_conditions": 0,
+      "simulated_end_to_end_total_cost_usd": 24.336003776047992,
+      "minimum_recall": 0,
+      "maximum_budgeted_summary_bytes": 0,
+      "failure_counts": {
+        "paired-cost": 12,
+        "recall": 24
+      }
+    },
+    {
+      "variant": "exact-vector-repeat-v1",
+      "tables": 0,
+      "bits": 0,
+      "conditions": 24,
+      "passing_conditions": 0,
+      "simulated_end_to_end_total_cost_usd": 15.333209382861,
+      "minimum_recall": 0.35125,
+      "maximum_budgeted_summary_bytes": 77776,
+      "failure_counts": {
+        "paired-cost": 12,
+        "recall": 24
+      }
+    },
+    {
+      "variant": "lsh-L1-K4",
+      "tables": 1,
+      "bits": 4,
+      "conditions": 72,
+      "passing_conditions": 25,
+      "simulated_end_to_end_total_cost_usd": 17.379227680541,
+      "minimum_recall": 0.9609756097560975,
+      "maximum_budgeted_summary_bytes": 177666,
+      "failure_counts": {
+        "paired-cost": 17,
+        "recall": 30
+      }
+    },
+    {
+      "variant": "lsh-L1-K8",
+      "tables": 1,
+      "bits": 8,
+      "conditions": 72,
+      "passing_conditions": 0,
+      "simulated_end_to_end_total_cost_usd": 18.908333148783,
+      "minimum_recall": 0.7804878048780488,
+      "maximum_budgeted_summary_bytes": 218068,
+      "failure_counts": {
+        "paired-cost": 36,
+        "recall": 72
+      }
+    },
+    {
+      "variant": "lsh-L2-K4",
+      "tables": 2,
+      "bits": 4,
+      "conditions": 72,
+      "passing_conditions": 71,
+      "simulated_end_to_end_total_cost_usd": 17.225561964746003,
+      "minimum_recall": 0.9939024390243902,
+      "maximum_budgeted_summary_bytes": 226292,
+      "failure_counts": {
+        "paired-cost": 1
+      }
+    },
+    {
+      "variant": "lsh-L2-K8",
+      "tables": 2,
+      "bits": 8,
+      "conditions": 72,
+      "passing_conditions": 3,
+      "simulated_end_to_end_total_cost_usd": 17.928177705414004,
+      "minimum_recall": 0.85625,
+      "maximum_budgeted_summary_bytes": 278884,
+      "failure_counts": {
+        "paired-cost": 33,
+        "recall": 48
+      }
+    },
+    {
+      "variant": "lsh-L4-K4",
+      "tables": 4,
+      "bits": 4,
+      "conditions": 72,
+      "passing_conditions": 65,
+      "simulated_end_to_end_total_cost_usd": 17.252347825818998,
+      "minimum_recall": 1,
+      "maximum_budgeted_summary_bytes": 322353,
+      "failure_counts": {
+        "paired-p95": 7
+      }
+    },
+    {
+      "variant": "lsh-L4-K8",
+      "tables": 4,
+      "bits": 8,
+      "conditions": 72,
+      "passing_conditions": 31,
+      "simulated_end_to_end_total_cost_usd": 17.365887609136994,
+      "minimum_recall": 0.91875,
+      "maximum_budgeted_summary_bytes": 412361,
+      "failure_counts": {
+        "paired-cost": 15,
+        "recall": 26
+      }
+    }
+  ],
+  "reason": "No LSH family meets every frozen tuning constraint. Retain always-search; continue later robustness and break-even analysis without a benefit claim.",
+  "tuning_directory": "results/phase4/tuning-v2",
+  "tuning_manifest_sha256": "31ff59b1a7fdd728b5ccbb9630373377517e2fcb1e183c2ebc717c40123b1824",
+  "sweep_sha256": "224beb0e84c18a08d4ca407853da921f3278911480fa437a8fc294bc32a018c0",
+  "frozen_at_utc": "2026-10-22T03:07:59.5870913Z"
+}

@@ -6,7 +6,8 @@
 /docs/experiment_protocol.md
 /docs/progress.md
 
-# Generated experiment runs and demo artifacts.
+# Generated runs: demo, tuning sweeps, paired evidence, debugging audits and profiles.
+# Authored configs/final_candidate.json and docs/phase4_tuning.md stay tracked.
 /results/
 /data/generated/
 
@@ -21,6 +22,7 @@
 *.exe
 *.test
 *.out
+*.coverprofile
 *.prof
 *.pprof
 *.trace

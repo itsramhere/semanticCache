@@ -111,6 +111,39 @@ func SaveReplay(dir, sourceRoot string, c Config, w Workload, runs []ReplayRun, 
 				return fmt.Errorf("saved workload: %w", err)
 			}
 			value = loaded
+		case "candidate.json":
+			loaded, err := LoadCandidate(bytes.NewReader(b))
+			if err != nil {
+				return err
+			}
+			configBytes, err := json.MarshalIndent(loaded.Experiment, "", "  ")
+			if err != nil {
+				return err
+			}
+			expectedConfig, err := json.MarshalIndent(c, "", "  ")
+			if err != nil {
+				return err
+			}
+			if !bytes.Equal(configBytes, expectedConfig) || loaded.Identity != w.Identity {
+				return fmt.Errorf("candidate differs from evaluated configuration/workload")
+			}
+			predictors, err := loaded.Predictors()
+			if err != nil {
+				return err
+			}
+			if len(predictors) != len(runs) {
+				return fmt.Errorf("candidate differs from evaluated routers")
+			}
+			for i, p := range predictors {
+				if p.ID() != runs[i].PredictorID {
+					return fmt.Errorf("candidate differs from evaluated routers")
+				}
+			}
+			value = loaded
+			artifacts[name], err = json.MarshalIndent(loaded, "", "  ")
+			if err != nil {
+				return err
+			}
 		default:
 			return fmt.Errorf("unexpected input artifact")
 		}
