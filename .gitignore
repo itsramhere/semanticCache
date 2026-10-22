@@ -8,11 +8,16 @@
 
 # Generated runs: demos, tuning sweeps, paired replays, churn/fault matrices,
 # request/event logs, recovery snapshots, local audit scripts and memory profiles.
-# Keep generated Phase 5 captures and debugging evidence beneath results/.
-# Authored configs (including churn/final_candidate), Phase 4/5 reports and
+# Keep Phase 5/6 captures, Qdrant downloads/state and debugging evidence in results/.
+# Authored configs (including churn/final_candidate), Phase 4/5/6 reports and
 # regression fixtures stay tracked.
 /results/
 /data/generated/
+
+# Qdrant defaults when a local backend is started from the repository root.
+/storage/
+/snapshots/
+/qdrant*.zip
 
 # Local projection exports; authored configurations and test fixtures stay tracked.
 /projections.json

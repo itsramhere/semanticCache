@@ -27,6 +27,8 @@ Commands:
   tune             Sweep tuning data only; flags: -config, -grid, -data-dir, -output.
   freeze-candidate Freeze a verified tuning choice; flags: -tuning, -output.
   churn            Replay seeded lifecycle/update faults; flags: -config, -output.
+  remote-demo      Paired Qdrant development replay; flags: -endpoint, -output, -repeats.
+  remote-account   Offline cost reconciliation; requires -run, -config, -output.
   version          Print module path, Go toolchain, and source revision.
   verify-policy    Execute the machine-checkable examples from docs/cache_policy.md.
   validate-config  Check a JSON experiment configuration:
@@ -52,6 +54,10 @@ func run(args []string, out, errOut io.Writer) int {
 		return 0
 	}
 	switch args[0] {
+	case "remote-account":
+		return remoteAccount(args[1:], out, errOut)
+	case "remote-demo":
+		return remoteDemo(args[1:], out, errOut)
 	case "churn":
 		return churn(args[1:], out, errOut)
 	case "freeze-candidate":

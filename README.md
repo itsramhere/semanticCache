@@ -2,7 +2,7 @@
 
 A Go prototype for reusing answers to semantically similar FAQ requests. Requests are embedded as vectors, matched against a scoped cache, and served from the cache only after the stored answer passes validation. A miss generates a new answer and caches it when eligible.
 
-The research goal is to determine whether a local predictor can skip unproductive semantic-cache searches cheaply enough to reduce total serving cost. **Phases 1 through 5 are complete, including debugging and tests:** the baseline, validated synthetic workloads, read-only oracle, paired replay modes, counted LSH predictor, tuning measurements, a frozen candidate decision, versioned lifecycle events and stale-summary recovery. No LSH family passed every frozen tuning constraint; the selected serving configuration uses always-search. Phase 5 validates lifecycle consistency and recovery within the prototype scope. The experiments have not demonstrated a performance benefit.
+The research goal is to determine whether a local predictor can skip unproductive semantic-cache searches cheaply enough to reduce total serving cost. **Phases 1 through 6 have passed implementation, debugging and test checks within the documented prototype scope:** the baseline, validated synthetic workloads, read-only oracle, paired replay modes, counted LSH predictor, tuning measurements, a frozen candidate decision, lifecycle recovery, a Qdrant adapter and reproducible remote cost/break-even accounting. No LSH family passed every frozen tuning constraint; the selected serving configuration uses always-search. The Phase 6 loopback development experiment saved two searches per 80 requests with exploratory LSH, but increased total routing time. Its lower modelled cost depends on simulated prices. The experiments have not demonstrated a production performance benefit. Phase 7 final evaluation and handoff remain.
 
 ## How it works
 
@@ -24,13 +24,14 @@ The baseline includes:
 - Explicit errors for invalid embeddings, failed searches, and failed generation. A cache-write failure is reported separately from a successful generated answer.
 - Per-request stage timings, response sources, operation counts, reusable embeddings, and run manifests.
 
-Cache access and replay are serialized. The current cache is in memory and does not persist across runs.
+Cache access and replay are serialized. The default cache is in memory. The optional Qdrant adapter requires a new, exclusively owned collection for each run.
 
 ## Requirements
 
 - Go **1.26.3 or later**.
 - A compatible C compiler and cgo for race-detector tests.
 - An optional Hugging Face Text Embeddings Inference (TEI) server for live embeddings.
+- Optional Qdrant **1.19.2** for remote adapter experiments and live integration tests.
 
 The application uses the Go standard library. The default demo requires no API key, Python installation, Docker, or running model server.
 
@@ -351,13 +352,39 @@ $env:CGO_ENABLED = '1'
 go test -race ./... -count=1
 ```
 
-Adjust the compiler path for your installation. Tests, vet checks, build, demo, and race-detector tests through Phase 5 passed on Windows/amd64 with Go 1.26.3 and GCC 15.2.0. Phase 4 tests cover tuning boundaries, complete seed matrices, grid and variant metadata, checksum rejection, every row's evidence, request-derived metrics, candidate selection and frozen fallback replay. Phase 5 tests add duplicate/stale event handling, reset barriers, delayed-update attribution, publication-time freshness, future-dated recovery rejection, scheduler payload ownership, and rebuild catch-up with intervening mutations. HTTP integration tests cover the complete adapter path; a Docker TEI deployment was not exercised.
+Adjust the compiler path for your installation. Tests, vet checks, build, demo, and race-detector tests through Phase 6 passed on Windows/amd64 with Go 1.26.3 and GCC 15.2.0. Phase 4 tests cover tuning boundaries, complete seed matrices, grid and variant metadata, checksum rejection, every row's evidence, request-derived metrics, candidate selection and frozen fallback replay. Phase 5 tests add duplicate/stale event handling, reset barriers, delayed-update attribution, publication-time freshness, future-dated recovery rejection, scheduler payload ownership, and rebuild catch-up with intervening mutations. Phase 6 tests cover live Qdrant/reference parity, explicit backend errors and timeouts, completed-write confirmation, malformed-query rejection, validated cost accounting, CLI evidence hashes and exact offline accounting reproduction. HTTP integration tests cover the complete adapter path; a Docker TEI deployment was not exercised.
 
 ## Measurement boundaries
 
 The offline demo measures routing with precomputed embeddings and excludes original embedding inference. Live mode includes HTTP and embedding inference. Fake generation timings measure deterministic local CPU work, not real LLM latency. Configuration includes simulated cost and latency assumptions for later experiments; the current demo does not apply them.
 
 The demo establishes baseline behavior. It does not establish answer correctness, predictor recall, cost savings, or a performance improvement.
+
+## Phase 6: remote cache experiments
+
+For remote setup, paired replay, offline cost reconciliation, measurement boundaries and results, see [Phase 6 remote experiments](docs/phase6_remote.md). With Qdrant listening on loopback port 16333:
+
+```powershell
+$env:SEMCACHE_QDRANT_URL = 'http://127.0.0.1:16333'
+go test ./... -count=1
+go run ./cmd/semcache remote-demo -endpoint http://127.0.0.1:16333 -output results/phase6/my-run -repeats 20 -rebuild-every 8
+go run ./cmd/semcache remote-account -run results/phase6/my-run/run.json -config results/phase6/my-run/config.json -output results/phase6/recomputed.json
+```
+
+Normal tests run offline when the environment variable is unset. Remote runs save exact source/input bytes, per-request JSONL, HTTP attempts, stage timings, rebuild measurements, CSV/JSON accounting and a checksum manifest. Monetary costs and model latencies are simulated; remote HTTP latency is measured. The exploratory LSH is separate from the frozen always-search candidate.
+
+`remote-demo` accepts `-endpoint`, `-config`, `-output`, `-repeats` and
+`-rebuild-every` (zero disables periodic rebuilds). `remote-account` requires
+`-run`, `-config` and `-output`, and runs without Qdrant. Use new output paths;
+both commands preserve existing evidence. Compare `recomputed.json` with
+`accounting.json` byte for byte, and verify the saved manifest hashes.
+
+The Phase 6 debugging audit added strict backend success-response checks and
+rejection of invalid accounting measurements, with regression and CLI evidence
+tests. Three fresh paired development replays verified 480 requests and exact
+offline accounting reproduction. LSH saved two searches per 80 requests while
+increasing paired total measured latency; monetary savings remain simulated.
+See the [audit results](docs/phase6_remote.md#phase-6-debugging-audit-2026-10-22).
 
 ## Repository layout
 
@@ -372,6 +399,7 @@ configs/churn.json             Seeded controlled lifecycle/update-fault experime
 
 docs/phase4_tuning.md           Tuning results, selection rationale and debugging audit
 docs/phase5_churn.md            Event contract, fault recovery and measured boundaries
+docs/phase6_remote.md           Qdrant semantics, cost reconciliation and break-even results
 data/catalog.json              Authored QA groups and split definitions
 data/README.md                 Data origin and generation instructions
 internal/semanticcache/        Cache, router, adapters, contracts, and tests
@@ -379,12 +407,11 @@ internal/semanticcache/testdata/ Recorded real embedding fixture
 go.mod                        Go module and toolchain requirement
 ```
 
-Generated datasets, tuning sweeps, churn matrices, request/event logs, recovery snapshots, replay/debugging evidence, heap/CPU profiles, local projection exports, binaries, coverage files, and the original local planning/progress Markdown files are ignored by Git. Keep experiment outputs under `results/`; recreate them using the commands above. The authored catalog, generator, configurations (including `configs/churn.json`), frozen candidate, regression fixtures, and Phase 4/5 reports are tracked. Raw local evidence referenced by the reports and frozen candidate is not included in the checkout; reproduce churn with the saved configuration and documented seed matrix, and reproduce candidate selection with a new tuning sweep or the retained original run directory.
+Generated datasets, tuning sweeps, churn matrices, request/event logs, recovery snapshots, replay/debugging evidence, heap/CPU profiles, local projection exports, binaries, coverage files, and the original local planning/progress Markdown files are ignored by Git. Keep experiment outputs, downloaded Qdrant binaries/archives and backend state under `results/`; recreate them using the commands above. Root-level Qdrant `storage/` and `snapshots/` directories are also ignored. The authored catalog, generator, configurations (including `configs/churn.json`), frozen candidate, regression fixtures, and Phase 4/5/6 reports are tracked. Raw local evidence referenced by the reports and frozen candidate is not included in the checkout; reproduce Phase 6 with the documented backend setup and remote commands, reproduce churn with the saved configuration and documented seed matrix, and reproduce candidate selection with a new tuning sweep or the retained original run directory.
 
 ## Planned work
 
-Phase 5 lifecycle ordering, delayed updates and reconciliation passed the required
-implementation, debugging and test checks.
-The next phases add remote-cache comparisons and a reproducible final evaluation.
-Those components are not implemented yet. The no-qualifying-candidate finding
-remains valid work: break-even analysis can continue without claiming savings.
+Phase 7 remains: the frozen final evaluation matrix and final report/handoff.
+Phase 6 is limited to measured loopback HTTP, a small development stream and
+conditional cost/latency models. It does not establish WAN or production savings,
+and the no-qualifying-candidate finding remains unchanged.

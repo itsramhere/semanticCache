@@ -85,6 +85,12 @@ type Baseline struct {
 func (b *Baseline) Serve(ctx context.Context, r Request) (result Result) {
 	if b.Predictor != nil {
 		return b.serve(ctx, r, func(v []float64) Decision {
+			if cache, ok := b.Cache.(*RemoteCache); ok {
+				if cache.summary != b.Predictor {
+					return Decision{true, "unsynchronized-summary-fallback", b.Predictor.ID()}
+				}
+				return cache.predict(r, v, b.Identity)
+			}
 			cache, ok := b.Cache.(*SynchronizedCache)
 			if !ok || cache.summary != b.Predictor {
 				return Decision{true, "unsynchronized-summary-fallback", b.Predictor.ID()}
@@ -112,6 +118,9 @@ func (b *Baseline) serve(ctx context.Context, r Request, predict func([]float64)
 	defer func() {
 		if c, ok := b.Cache.(*SynchronizedCache); ok && c.MaintenanceError() != nil {
 			result.SummaryError = c.MaintenanceError().Error()
+		}
+		if c, ok := b.Cache.(*RemoteCache); ok && c.maintenanceError != nil {
+			result.SummaryError = c.maintenanceError.Error()
 		}
 	}()
 	fail := func(err error) Result { result.Error = err.Error(); return result }
@@ -233,6 +242,10 @@ func (b *Baseline) serve(ctx context.Context, r Request, predict func([]float64)
 		err = b.Cache.Put(ctx, entry)
 		result.Timings.CacheWriteNS = time.Since(stage).Nanoseconds()
 		if cache, ok := b.Cache.(*SynchronizedCache); ok {
+			result.Timings.CacheWriteNS -= cache.lastUpdateNS
+			result.Timings.UpdateNS += cache.lastUpdateNS
+		}
+		if cache, ok := b.Cache.(*RemoteCache); ok {
 			result.Timings.CacheWriteNS -= cache.lastUpdateNS
 			result.Timings.UpdateNS += cache.lastUpdateNS
 		}
