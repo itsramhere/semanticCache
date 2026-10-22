@@ -231,3 +231,12 @@ func (c *ReferenceCache) Evict() (string, error) {
 	c.purge(now)
 	return c.evict(), nil
 }
+
+// Clear empties the cache without reusing FIFO insertion versions.
+func (c *ReferenceCache) Clear() error {
+	if _, err := c.now(); err != nil {
+		return err
+	}
+	c.entries = make(map[string]storedEntry)
+	return nil
+}

@@ -1,0 +1,18 @@
+{
+  "id": "phase5-controlled-churn-v1",
+  "workload_seed": 101,
+  "projection_seed": 1001,
+  "steps": 60,
+  "step_ms": 1000,
+  "capacity": 3,
+  "ttl_seconds": 5,
+  "freshness_limit_ms": 3000,
+  "heartbeat_every_steps": 4,
+  "rebuild_every_steps": 12,
+  "faults": {
+    "seed": 5001,
+    "max_delay_ms": 6000,
+    "duplicate_probability": 0.3,
+    "drop_probability": 0.15
+  }
+}

@@ -6,8 +6,11 @@
 /docs/experiment_protocol.md
 /docs/progress.md
 
-# Generated runs: demo, tuning sweeps, paired evidence, debugging audits and profiles.
-# Authored configs/final_candidate.json and docs/phase4_tuning.md stay tracked.
+# Generated runs: demos, tuning sweeps, paired replays, churn/fault matrices,
+# request/event logs, recovery snapshots, local audit scripts and memory profiles.
+# Keep generated Phase 5 captures and debugging evidence beneath results/.
+# Authored configs (including churn/final_candidate), Phase 4/5 reports and
+# regression fixtures stay tracked.
 /results/
 /data/generated/
 

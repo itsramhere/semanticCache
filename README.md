@@ -2,7 +2,7 @@
 
 A Go prototype for reusing answers to semantically similar FAQ requests. Requests are embedded as vectors, matched against a scoped cache, and served from the cache only after the stored answer passes validation. A miss generates a new answer and caches it when eligible.
 
-The research goal is to determine whether a local predictor can skip unproductive semantic-cache searches cheaply enough to reduce total serving cost. **Phases 1 through 4 are complete, including debugging and tests:** the baseline, validated synthetic workloads, read-only oracle, paired replay modes, counted LSH predictor, tuning measurements and a frozen candidate decision. No LSH family passed every frozen tuning constraint; the selected serving configuration uses always-search. Completing Phase 4 establishes the measured tradeoff, without demonstrating a performance benefit.
+The research goal is to determine whether a local predictor can skip unproductive semantic-cache searches cheaply enough to reduce total serving cost. **Phases 1 through 5 are complete, including debugging and tests:** the baseline, validated synthetic workloads, read-only oracle, paired replay modes, counted LSH predictor, tuning measurements, a frozen candidate decision, versioned lifecycle events and stale-summary recovery. No LSH family passed every frozen tuning constraint; the selected serving configuration uses always-search. Phase 5 validates lifecycle consistency and recovery within the prototype scope. The experiments have not demonstrated a performance benefit.
 
 ## How it works
 
@@ -191,8 +191,8 @@ with the active cache. A mismatch searches with an explicit fallback reason.
 Synchronous maintenance, including its snapshot copying, is charged to update
 time and serving cost. Memory is a conservative structural estimate including
 projections, vectors, entry ledger, keys, strings and map/container allowances;
-retained heap and separate process measurements are added by Phase 4. Peak
-memory during rebuilding remains unmeasured.
+retained heap and separate process measurements are added by Phase 4. Phase 5
+adds separate rebuild memory measurements with explicit sampling limits.
 
 LSH can skip real semantic matches. A regression separates vectors `(0.1, 1)`
 and `(-0.1, 1)` using the x=0 plane despite cosine similarity about 0.98. The
@@ -275,6 +275,46 @@ Tests, vet, build, race detection, eight development-only fallback replay
 conditions and all 108 benchmark samples passed. The original frozen candidate
 is preserved, and held-out final evaluation remains unopened.
 
+## Phase 5: lifecycle events and delayed updates
+
+Run the seeded controlled churn experiment:
+
+```powershell
+go run ./cmd/semcache churn -config configs/churn.json -output results/my-churn
+```
+
+Phase 5.1 adds content-addressed event IDs, contiguous per-stream ordering,
+entry-version checks, harmless duplicate/stale deliveries and a reset barrier.
+Synchronous cache mutations consume this event stream; maintenance failures keep
+search fallback enabled until rebuilding. Six hundred seeded lifecycle mutations
+match fresh entry/bucket rebuilds after every step, including exact TTL expiry.
+
+Phase 5.2 simulates delayed, reordered, duplicated and dropped events. Request
+and event logs record watermarks, buffered events, event age, reconciliation
+state and fallback reasons. Detected gaps, source silence and freshness breaches
+disable skipping. A watermarked rebuild replays newer reliable-source events
+before enabling the replacement. Prediction reads only local summary state.
+
+The debugging audit's eighteen-run controlled matrix serves 1,080 requests and
+restores exact agreement in every run, covering three seeds, fresh/mixed/silent
+updates, capacity one, exact TTL boundaries and frequent rebuilds.
+Mixed faults record twelve stale-removal wasted searches; silent
+tails record nine missed hits before detection. Unknown tail updates cannot be
+detected immediately. Structural rebuild memory and sampled process heap peaks
+are reported separately, and short Windows timings often round to zero.
+
+The audit fixed source freshness being extended by duplicate/delayed deliveries,
+future-dated source data being enabled through recovery, and scheduling evidence
+sharing mutable payloads with queued deliveries. Focused regressions reproduced
+each failure before its fix. Tests, vet, build and race detection passed.
+
+These fixtures use simulated 2D vectors, logical update delay and fake generation.
+The frozen always-search candidate is unchanged. See the
+[Phase 5 report](docs/phase5_churn.md) for reproduction settings, event/recovery
+contracts, results and measurement limits. The new output directory contains
+config/workload/projections, JSONL/CSV traces, metrics, rebuild measurements and
+a source/artifact checksum manifest. `churn` accepts `-config` and `-output`.
+
 ## Live embeddings
 
 The Go HTTP adapter supports a [Hugging Face TEI server](https://huggingface.co/docs/text-embeddings-inference/quick_tour). Configure the server with:
@@ -311,7 +351,7 @@ $env:CGO_ENABLED = '1'
 go test -race ./... -count=1
 ```
 
-Adjust the compiler path for your installation. Tests, vet checks, build, demo, and race-detector tests through Phase 4 passed on Windows/amd64 with Go 1.26.3 and GCC 15.2.0. Phase 4 tests cover tuning boundaries, complete seed matrices, grid and variant metadata, checksum rejection, every row's evidence, request-derived metrics, candidate selection and frozen fallback replay. HTTP integration tests cover the complete adapter path; a Docker TEI deployment was not exercised.
+Adjust the compiler path for your installation. Tests, vet checks, build, demo, and race-detector tests through Phase 5 passed on Windows/amd64 with Go 1.26.3 and GCC 15.2.0. Phase 4 tests cover tuning boundaries, complete seed matrices, grid and variant metadata, checksum rejection, every row's evidence, request-derived metrics, candidate selection and frozen fallback replay. Phase 5 tests add duplicate/stale event handling, reset barriers, delayed-update attribution, publication-time freshness, future-dated recovery rejection, scheduler payload ownership, and rebuild catch-up with intervening mutations. HTTP integration tests cover the complete adapter path; a Docker TEI deployment was not exercised.
 
 ## Measurement boundaries
 
@@ -328,8 +368,10 @@ configs/phase2_fixture.json    Controlled evaluation configuration
 configs/lsh_development.json   Development LSH projection configuration
 configs/tuning_grid.json       Recorded Phase 4 table/bit grid
 configs/final_candidate.json   Frozen serving choice and tuning assessments
+configs/churn.json             Seeded controlled lifecycle/update-fault experiment
 
 docs/phase4_tuning.md           Tuning results, selection rationale and debugging audit
+docs/phase5_churn.md            Event contract, fault recovery and measured boundaries
 data/catalog.json              Authored QA groups and split definitions
 data/README.md                 Data origin and generation instructions
 internal/semanticcache/        Cache, router, adapters, contracts, and tests
@@ -337,12 +379,12 @@ internal/semanticcache/testdata/ Recorded real embedding fixture
 go.mod                        Go module and toolchain requirement
 ```
 
-Generated datasets, tuning sweeps, replay/debugging evidence, heap/CPU profiles, local projection exports, binaries, coverage files, and the original local planning/progress Markdown files are ignored by Git. Keep experiment outputs under `results/`; recreate them using the commands above. The authored catalog, generator, configurations, frozen candidate, regression fixtures, and public tuning report are tracked. Raw local evidence referenced by the frozen candidate is not included in the checkout; reproducing selection requires generating a new tuning sweep or retaining the original run directory.
+Generated datasets, tuning sweeps, churn matrices, request/event logs, recovery snapshots, replay/debugging evidence, heap/CPU profiles, local projection exports, binaries, coverage files, and the original local planning/progress Markdown files are ignored by Git. Keep experiment outputs under `results/`; recreate them using the commands above. The authored catalog, generator, configurations (including `configs/churn.json`), frozen candidate, regression fixtures, and Phase 4/5 reports are tracked. Raw local evidence referenced by the reports and frozen candidate is not included in the checkout; reproduce churn with the saved configuration and documented seed matrix, and reproduce candidate selection with a new tuning sweep or the retained original run directory.
 
 ## Planned work
 
-The next phase covers lifecycle event ordering, delayed updates and reconciliation.
-Later phases add remote-cache comparisons and a reproducible final evaluation.
-These components are not implemented yet. The no-qualifying-candidate finding
-remains valid work: later robustness and break-even analysis can continue without
-claiming savings.
+Phase 5 lifecycle ordering, delayed updates and reconciliation passed the required
+implementation, debugging and test checks.
+The next phases add remote-cache comparisons and a reproducible final evaluation.
+Those components are not implemented yet. The no-qualifying-candidate finding
+remains valid work: break-even analysis can continue without claiming savings.

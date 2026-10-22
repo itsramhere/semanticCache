@@ -151,7 +151,13 @@ func Replay(ctx context.Context, c Config, w Workload, o ReplayOptions, p Replay
 	// End-to-end LSH mutations synchronously maintain occupancy before another
 	// decision. Isolation continues to consume authoritative snapshot updates.
 	if summary, ok := p.(*LSHSummary); ok && o.Mode == "end-to-end" {
-		b.Cache = &SynchronizedCache{cache: cache, summary: summary}
+		start = time.Now()
+		b.Cache, err = NewSynchronizedCache(cache, summary, w.Identity)
+		run.BuildNS += time.Since(start).Nanoseconds()
+		if err != nil {
+			return run, err
+		}
+		run.MemoryBytes = b.Cache.(*SynchronizedCache).MemoryBytes()
 	}
 	for i, labeled := range w.Requests {
 		if err := ctx.Err(); err != nil {
@@ -220,7 +226,11 @@ func Replay(ctx context.Context, c Config, w Workload, o ReplayOptions, p Replay
 		updateNS := time.Since(start).Nanoseconds()
 		row.Result.Timings.UpdateNS += updateNS
 		row.Result.Timings.TotalNS += updateNS
-		if memory := p.MemoryBytes(); memory > run.MemoryBytes {
+		memory := p.MemoryBytes()
+		if synchronized, ok := b.Cache.(*SynchronizedCache); ok {
+			memory = synchronized.MemoryBytes()
+		}
+		if memory > run.MemoryBytes {
 			run.MemoryBytes = memory
 			run.MemorySnapshot = row.PostState
 		}

@@ -256,8 +256,8 @@ func SaveReplay(dir, sourceRoot string, c Config, w Workload, runs []ReplayRun, 
 		"configuration_id": c.ID, "embedding_identity": w.Identity, "vector_source": w.VectorSource, "options": runs[0].Options,
 		"command": os.Args, "generation": "deterministic simulated fake LLM",
 		"projection_seeds":        projectionSeeds,
-		"summary_memory_boundary": "conservative structural estimate including projections, entries, vectors, keys, strings and map/container allowances; not a retained-heap or process measurement",
-		"timing_boundary":         "measured local routing with precomputed vectors; excludes original embedding inference, evaluation snapshot copies, oracle and logging; includes vector loading, prediction, generation CPU, synchronous maintenance snapshots and Observe; build separately amortized; no sleeps",
+		"summary_memory_boundary": "conservative structural estimate including projections, entries, vectors, keys, strings and map/container allowances; synchronous end-to-end LSH also includes its event-journal snapshot and entry-version maps; not a retained-heap or process measurement",
+		"timing_boundary":         "measured local routing with precomputed vectors; excludes original embedding inference, evaluation snapshot copies, oracle and logging; includes vector loading, prediction, generation CPU, synchronous maintenance snapshots and event capture/application (Observe for isolation); build separately amortized; no sleeps",
 	}
 	b, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {

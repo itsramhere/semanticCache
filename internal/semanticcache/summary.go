@@ -67,6 +67,29 @@ func (s *LSHSummary) remove(id string) {
 	delete(s.entries, id)
 }
 
+func (s *LSHSummary) upsert(e Entry) error {
+	if !e.Validity.Reusable || e.Validity.Revoked {
+		s.remove(e.ID)
+		return nil
+	}
+	keys, err := s.projections.keys(e.Scope, e.Embedding, s.id)
+	if err != nil {
+		return err
+	}
+	s.remove(e.ID)
+	for _, key := range keys {
+		s.buckets[key]++
+	}
+	s.entries[e.ID] = summaryEntry{cloneEntry(e), keys}
+	if len(s.buckets) > s.peakBuckets {
+		s.peakBuckets = len(s.buckets)
+	}
+	if len(s.entries) > s.peakEntries {
+		s.peakEntries = len(s.entries)
+	}
+	return nil
+}
+
 // Observe reconciles a serialized authoritative snapshot incrementally. Unchanged
 // entries are not rehashed. Failure immediately disables skipping until Reset.
 func (s *LSHSummary) Observe(snapshot CacheSnapshot) (err error) {
@@ -92,20 +115,8 @@ func (s *LSHSummary) Observe(snapshot CacheSnapshot) (err error) {
 		if old, ok := s.entries[e.ID]; ok && reflect.DeepEqual(old.Entry, e) {
 			continue
 		}
-		keys, hashErr := s.projections.keys(e.Scope, e.Embedding, s.id)
-		if hashErr != nil {
-			return hashErr
-		}
-		s.remove(e.ID)
-		for _, key := range keys {
-			s.buckets[key]++
-		}
-		s.entries[e.ID] = summaryEntry{cloneEntry(e), keys}
-		if len(s.buckets) > s.peakBuckets {
-			s.peakBuckets = len(s.buckets)
-		}
-		if len(s.entries) > s.peakEntries {
-			s.peakEntries = len(s.entries)
+		if err := s.upsert(e); err != nil {
+			return err
 		}
 	}
 	for id := range s.entries {

@@ -26,6 +26,7 @@ Commands:
                    -mode, -start, -capacity, -oracle-every, -oracle-log, -lsh, -candidate.
   tune             Sweep tuning data only; flags: -config, -grid, -data-dir, -output.
   freeze-candidate Freeze a verified tuning choice; flags: -tuning, -output.
+  churn            Replay seeded lifecycle/update faults; flags: -config, -output.
   version          Print module path, Go toolchain, and source revision.
   verify-policy    Execute the machine-checkable examples from docs/cache_policy.md.
   validate-config  Check a JSON experiment configuration:
@@ -35,6 +36,7 @@ Commands:
 Phase 1 supplies the baseline. Phase 2 supplies controlled workload evaluation.
 Phase 3 supplies the counted LSH predictor and synchronous maintenance.
 Phase 4 supplies tuning, memory/CPU measurement, and candidate freezing.
+Phase 5 supplies versioned lifecycle events, fault simulation and reconciliation.
 `
 
 func main() {
@@ -50,6 +52,8 @@ func run(args []string, out, errOut io.Writer) int {
 		return 0
 	}
 	switch args[0] {
+	case "churn":
+		return churn(args[1:], out, errOut)
 	case "freeze-candidate":
 		return freezeCandidate(args[1:], out, errOut)
 	case "tune":
